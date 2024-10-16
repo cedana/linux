@@ -24,13 +24,13 @@
 
 static int __initdata_or_module debug_callthunks;
 
-#define MAX_PATCH_LEN (255-1)
+#define MAX_PATCH_LEN (255 - 1)
 
-#define prdbg(fmt, args...)					\
-do {								\
-	if (debug_callthunks)					\
-		printk(KERN_DEBUG pr_fmt(fmt), ##args);		\
-} while(0)
+#define prdbg(fmt, args...)                                     \
+	do {                                                    \
+		if (debug_callthunks)                           \
+			printk(KERN_DEBUG pr_fmt(fmt), ##args); \
+	} while (0)
 
 static int __init debug_thunks(char *str)
 {
@@ -51,28 +51,26 @@ EXPORT_SYMBOL_GPL(__x86_call_count);
 extern s32 __call_sites[], __call_sites_end[];
 
 struct core_text {
-	unsigned long	base;
-	unsigned long	end;
-	const char	*name;
+	unsigned long base;
+	unsigned long end;
+	const char *name;
 };
 
 static bool thunks_initialized __ro_after_init;
 
 static const struct core_text builtin_coretext = {
 	.base = (unsigned long)_text,
-	.end  = (unsigned long)_etext,
+	.end = (unsigned long)_etext,
 	.name = "builtin",
 };
 
-asm (
-	".pushsection .rodata				\n"
-	".global skl_call_thunk_template		\n"
-	"skl_call_thunk_template:			\n"
-		__stringify(INCREMENT_CALL_DEPTH)"	\n"
-	".global skl_call_thunk_tail			\n"
-	"skl_call_thunk_tail:				\n"
-	".popsection					\n"
-);
+asm(".pushsection .rodata				\n"
+    ".global skl_call_thunk_template		\n"
+    "skl_call_thunk_template:			\n" __stringify(
+	    INCREMENT_CALL_DEPTH) "	\n"
+				  ".global skl_call_thunk_tail			\n"
+				  "skl_call_thunk_tail:				\n"
+				  ".popsection					\n");
 
 extern u8 skl_call_thunk_template[];
 extern u8 skl_call_thunk_tail[];
@@ -140,12 +138,12 @@ static bool skip_addr(void *dest)
 #endif
 #ifdef CONFIG_KEXEC_CORE
 	if (dest >= (void *)relocate_kernel &&
-	    dest < (void*)relocate_kernel + KEXEC_CONTROL_CODE_MAX_SIZE)
+	    dest < (void *)relocate_kernel + KEXEC_CONTROL_CODE_MAX_SIZE)
 		return true;
 #endif
 #ifdef CONFIG_XEN
 	if (dest >= (void *)hypercall_page &&
-	    dest < (void*)hypercall_page + PAGE_SIZE)
+	    dest < (void *)hypercall_page + PAGE_SIZE)
 		return true;
 #endif
 	return false;
@@ -172,10 +170,9 @@ static __init_or_module void *call_get_dest(void *addr)
 }
 
 static const u8 nops[] = {
-	0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
-	0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
-	0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
-	0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
+	0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
+	0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
+	0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
 };
 
 static void *patch_dest(void *dest, bool direct)
@@ -185,8 +182,7 @@ static void *patch_dest(void *dest, bool direct)
 	u8 *pad = dest - tsize;
 
 	memcpy(insn_buff, skl_call_thunk_template, tsize);
-	apply_relocation(insn_buff, tsize, pad,
-			 skl_call_thunk_template, tsize);
+	apply_relocation(insn_buff, tsize, pad, skl_call_thunk_template, tsize);
 
 	/* Already patched? */
 	if (!bcmp(pad, insn_buff, tsize))
@@ -224,14 +220,14 @@ static __init_or_module void patch_call(void *addr, const struct core_text *ct)
 	if (!pad)
 		return;
 
-	prdbg("Patch call at: %pS %px to %pS %px -> %px \n", addr, addr,
-		dest, dest, pad);
+	prdbg("Patch call at: %pS %px to %pS %px -> %px \n", addr, addr, dest,
+	      dest, pad);
 	__text_gen_insn(bytes, CALL_INSN_OPCODE, addr, pad, CALL_INSN_SIZE);
 	text_poke_early(addr, bytes, CALL_INSN_SIZE);
 }
 
-static __init_or_module void
-patch_call_sites(s32 *start, s32 *end, const struct core_text *ct)
+static __init_or_module void patch_call_sites(s32 *start, s32 *end,
+					      const struct core_text *ct)
 {
 	s32 *s;
 
@@ -239,34 +235,31 @@ patch_call_sites(s32 *start, s32 *end, const struct core_text *ct)
 		patch_call((void *)s + *s, ct);
 }
 
-static __init_or_module void
-patch_paravirt_call_sites(struct paravirt_patch_site *start,
-			  struct paravirt_patch_site *end,
-			  const struct core_text *ct)
+static __init_or_module void patch_alt_call_sites(struct alt_instr *start,
+						  struct alt_instr *end,
+						  const struct core_text *ct)
 {
-	struct paravirt_patch_site *p;
+	struct alt_instr *a;
 
-	for (p = start; p < end; p++)
-		patch_call((void *)&p->instr_offset + p->instr_offset, ct);
+	for (a = start; a < end; a++)
+		patch_call((void *)&a->instr_offset + a->instr_offset, ct);
 }
 
-static __init_or_module void
-callthunks_setup(struct callthunk_sites *cs, const struct core_text *ct)
+static __init_or_module void callthunks_setup(struct callthunk_sites *cs,
+					      const struct core_text *ct)
 {
 	prdbg("Patching call sites %s\n", ct->name);
 	patch_call_sites(cs->call_start, cs->call_end, ct);
-	patch_paravirt_call_sites(cs->pv_start, cs->pv_end, ct);
+	patch_alt_call_sites(cs->alt_start, cs->alt_end, ct);
 	prdbg("Patching call sites done%s\n", ct->name);
 }
 
 void __init callthunks_patch_builtin_calls(void)
 {
-	struct callthunk_sites cs = {
-		.call_start	= __call_sites,
-		.call_end	= __call_sites_end,
-		.pv_start	= __parainstructions,
-		.pv_end		= __parainstructions_end
-	};
+	struct callthunk_sites cs = { .call_start = __call_sites,
+				      .call_end = __call_sites_end,
+				      .alt_start = __alt_instructions,
+				      .alt_end = __alt_instructions_end };
 
 	if (!cpu_feature_enabled(X86_FEATURE_CALL_DEPTH))
 		return;
@@ -291,7 +284,7 @@ void *callthunks_translate_call_dest(void *dest)
 		return dest;
 
 	target = patch_dest(dest, false);
-	return target ? : dest;
+	return target ?: dest;
 }
 
 #ifdef CONFIG_BPF_JIT
@@ -309,8 +302,8 @@ static bool is_callthunk(void *addr)
 	pad = (void *)(dest - tmpl_size);
 
 	memcpy(insn_buff, skl_call_thunk_template, tmpl_size);
-	apply_relocation(insn_buff, tmpl_size, pad,
-			 skl_call_thunk_template, tmpl_size);
+	apply_relocation(insn_buff, tmpl_size, pad, skl_call_thunk_template,
+			 tmpl_size);
 
 	return !bcmp(pad, insn_buff, tmpl_size);
 }
@@ -328,8 +321,8 @@ int x86_call_depth_emit_accounting(u8 **pprog, void *func)
 		return 0;
 
 	memcpy(insn_buff, skl_call_thunk_template, tmpl_size);
-	apply_relocation(insn_buff, tmpl_size, *pprog,
-			 skl_call_thunk_template, tmpl_size);
+	apply_relocation(insn_buff, tmpl_size, *pprog, skl_call_thunk_template,
+			 tmpl_size);
 
 	memcpy(*pprog, insn_buff, tmpl_size);
 	*pprog += tmpl_size;
@@ -343,7 +336,8 @@ void noinline callthunks_patch_module_calls(struct callthunk_sites *cs,
 {
 	struct core_text ct = {
 		.base = (unsigned long)mod->mem[MOD_TEXT].base,
-		.end  = (unsigned long)mod->mem[MOD_TEXT].base + mod->mem[MOD_TEXT].size,
+		.end = (unsigned long)mod->mem[MOD_TEXT].base +
+		       mod->mem[MOD_TEXT].size,
 		.name = mod->name,
 	};
 
@@ -375,10 +369,10 @@ static int callthunks_debug_open(struct inode *inode, struct file *file)
 }
 
 static const struct file_operations dfs_ops = {
-	.open		= callthunks_debug_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
+	.open = callthunks_debug_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
 };
 
 static int __init callthunks_debugfs_init(void)
@@ -389,7 +383,7 @@ static int __init callthunks_debugfs_init(void)
 	dir = debugfs_create_dir("callthunks", NULL);
 	for_each_possible_cpu(cpu) {
 		void *arg = (void *)cpu;
-		char name [10];
+		char name[10];
 
 		sprintf(name, "cpu%lu", cpu);
 		debugfs_create_file(name, 0644, dir, arg, &dfs_ops);

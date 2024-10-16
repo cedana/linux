@@ -5,15 +5,16 @@
 #ifndef __ASSEMBLY__
 /* These all sit in the .parainstructions section to tell us what to patch. */
 struct paravirt_patch_site {
-	s32 instr_offset;	/* original instructions */
-	u8 type;		/* type of this instruction */
-	u8 len;			/* length of original instruction */
+	s32 instr_offset; /* original instructions */
+	u8 type; /* type of this instruction */
+	u8 len; /* length of original instruction */
 } __packed;
 #endif
 
 #ifdef CONFIG_PARAVIRT
 
 #ifndef __ASSEMBLY__
+#include <linux/types.h>
 
 #include <asm/desc_defs.h>
 #include <asm/pgtable_types.h>
@@ -42,7 +43,7 @@ struct paravirt_callee_save {
 /* general info */
 struct pv_info {
 #ifdef CONFIG_PARAVIRT_XXL
-	u16 extra_user_64bit_cs;  /* __USER_CS if none */
+	u16 extra_user_64bit_cs; /* __USER_CS if none */
 #endif
 
 	const char *name;
@@ -80,10 +81,10 @@ struct pv_cpu_ops {
 	void (*load_gs_index)(unsigned int idx);
 	void (*write_ldt_entry)(struct desc_struct *ldt, int entrynum,
 				const void *desc);
-	void (*write_gdt_entry)(struct desc_struct *,
-				int entrynum, const void *desc, int size);
-	void (*write_idt_entry)(gate_desc *,
-				int entrynum, const gate_desc *gate);
+	void (*write_gdt_entry)(struct desc_struct *, int entrynum,
+				const void *desc, int size);
+	void (*write_idt_entry)(gate_desc *, int entrynum,
+				const gate_desc *gate);
 	void (*alloc_ldt)(struct desc_struct *ldt, unsigned entries);
 	void (*free_ldt)(struct desc_struct *ldt, unsigned entries);
 
@@ -97,8 +98,8 @@ struct pv_cpu_ops {
 	void (*wbinvd)(void);
 
 	/* cpuid emulation, mostly so that caps bits can be disabled */
-	void (*cpuid)(unsigned int *eax, unsigned int *ebx,
-		      unsigned int *ecx, unsigned int *edx);
+	void (*cpuid)(unsigned int *eax, unsigned int *ebx, unsigned int *ecx,
+		      unsigned int *edx);
 
 	/* Unsafe MSR operations.  These will warn or panic on failure. */
 	u64 (*read_msr)(unsigned int msr);
@@ -148,7 +149,8 @@ struct pv_mmu_ops {
 
 	/* Hook for intercepting the destruction of an mm_struct. */
 	void (*exit_mmap)(struct mm_struct *mm);
-	void (*notify_page_enc_status_changed)(unsigned long pfn, int npages, bool enc);
+	void (*notify_page_enc_status_changed)(unsigned long pfn, int npages,
+					       bool enc);
 
 #ifdef CONFIG_PARAVIRT_XXL
 	struct paravirt_callee_save read_cr2;
@@ -161,7 +163,7 @@ struct pv_mmu_ops {
 	void (*enter_mmap)(struct mm_struct *mm);
 
 	/* Hooks for allocating and freeing a pagetable top-level */
-	int  (*pgd_alloc)(struct mm_struct *mm);
+	int (*pgd_alloc)(struct mm_struct *mm);
 	void (*pgd_free)(struct mm_struct *mm, pgd_t *pgd);
 
 	/*
@@ -181,10 +183,11 @@ struct pv_mmu_ops {
 	void (*set_pte)(pte_t *ptep, pte_t pteval);
 	void (*set_pmd)(pmd_t *pmdp, pmd_t pmdval);
 
-	pte_t (*ptep_modify_prot_start)(struct vm_area_struct *vma, unsigned long addr,
-					pte_t *ptep);
-	void (*ptep_modify_prot_commit)(struct vm_area_struct *vma, unsigned long addr,
-					pte_t *ptep, pte_t pte);
+	pte_t (*ptep_modify_prot_start)(struct vm_area_struct *vma,
+					unsigned long addr, pte_t *ptep);
+	void (*ptep_modify_prot_commit)(struct vm_area_struct *vma,
+					unsigned long addr, pte_t *ptep,
+					pte_t pte);
 
 	struct paravirt_callee_save pte_val;
 	struct paravirt_callee_save make_pte;
@@ -207,7 +210,7 @@ struct pv_mmu_ops {
 	struct paravirt_callee_save make_p4d;
 
 	void (*set_pgd)(pgd_t *pgdp, pgd_t pgdval);
-#endif	/* CONFIG_PGTABLE_LEVELS >= 5 */
+#endif /* CONFIG_PGTABLE_LEVELS >= 5 */
 
 	struct pv_lazy_ops lazy_mode;
 
@@ -245,52 +248,49 @@ struct pv_lock_ops {
  * number for each function using the offset which we use to indicate
  * what to patch. */
 struct paravirt_patch_template {
-	struct pv_cpu_ops	cpu;
-	struct pv_irq_ops	irq;
-	struct pv_mmu_ops	mmu;
-	struct pv_lock_ops	lock;
+	struct pv_cpu_ops cpu;
+	struct pv_irq_ops irq;
+	struct pv_mmu_ops mmu;
+	struct pv_lock_ops lock;
 } __no_randomize_layout;
 
 extern struct pv_info pv_info;
 extern struct paravirt_patch_template pv_ops;
 
-#define PARAVIRT_PATCH(x)					\
+#define PARAVIRT_PATCH(x) \
 	(offsetof(struct paravirt_patch_template, x) / sizeof(void *))
 
-#define paravirt_type(op)				\
-	[paravirt_typenum] "i" (PARAVIRT_PATCH(op)),	\
-	[paravirt_opptr] "m" (pv_ops.op)
+#define paravirt_type(op)                                                 \
+	[paravirt_typenum] "i"(PARAVIRT_PATCH(op)), [paravirt_opptr] "m"( \
+							    pv_ops.op)
 /*
  * Generate some code, and mark it as patchable by the
  * apply_paravirt() alternate instruction patcher.
  */
-#define _paravirt_alt(insn_string, type)		\
-	"771:\n\t" insn_string "\n" "772:\n"		\
-	".pushsection .parainstructions,\"a\"\n"	\
-	"  .long 771b-.\n"				\
-	"  .byte " type "\n"				\
-	"  .byte 772b-771b\n"				\
+#define _paravirt_alt(insn_string, type)         \
+	"771:\n\t" insn_string "\n"              \
+	"772:\n"                                 \
+	".pushsection .parainstructions,\"a\"\n" \
+	"  .long 771b-.\n"                       \
+	"  .byte " type "\n"                     \
+	"  .byte 772b-771b\n"                    \
 	".popsection\n"
 
 /* Generate patchable code, with the default asm parameters. */
-#define paravirt_alt(insn_string)					\
+#define paravirt_alt(insn_string) \
 	_paravirt_alt(insn_string, "%c[paravirt_typenum]")
 
 /* Simple instruction patching code. */
-#define NATIVE_LABEL(a,x,b) "\n\t.globl " a #x "_" #b "\n" a #x "_" #b ":\n\t"
+#define NATIVE_LABEL(a, x, b) "\n\t.globl " a #x "_" #b "\n" a #x "_" #b ":\n\t"
 
-unsigned int paravirt_patch(u8 type, void *insn_buff, unsigned long addr, unsigned int len);
+unsigned int paravirt_patch(u8 type, void *insn_buff, unsigned long addr,
+			    unsigned int len);
 
 int paravirt_disable_iospace(void);
 
-/*
- * This generates an indirect call based on the operation type number.
- * The type number, computed in PARAVIRT_PATCH, is derived from the
- * offset into the paravirt_patch_template structure, and can therefore be
- * freely converted back into a structure offset.
- */
-#define PARAVIRT_CALL					\
-	ANNOTATE_RETPOLINE_SAFE				\
+/* This generates an indirect call based on the operation type number. */
+#define PARAVIRT_CALL           \
+	ANNOTATE_RETPOLINE_SAFE \
 	"call *%[paravirt_opptr];"
 
 /*
@@ -320,12 +320,6 @@ int paravirt_disable_iospace(void);
  * special handling for dealing with 4 arguments, unlike i386.
  * However, x86_64 also has to clobber all caller saved registers, which
  * unfortunately, are quite a bit (r8 - r11)
- *
- * The call instruction itself is marked by placing its start address
- * and size into the .parainstructions section, so that
- * apply_paravirt() in arch/i386/kernel/alternative.c can do the
- * appropriate patching under the control of the backend pv_init_ops
- * implementation.
  *
  * Unfortunately there's no way to get gcc to generate the args setup
  * for the call, and then allow the call itself to be generated by an
@@ -358,37 +352,34 @@ int paravirt_disable_iospace(void);
  * makes sure the incoming and outgoing types are always correct.
  */
 #ifdef CONFIG_X86_32
-#define PVOP_CALL_ARGS							\
+#define PVOP_CALL_ARGS \
 	unsigned long __eax = __eax, __edx = __edx, __ecx = __ecx;
 
-#define PVOP_CALL_ARG1(x)		"a" ((unsigned long)(x))
-#define PVOP_CALL_ARG2(x)		"d" ((unsigned long)(x))
-#define PVOP_CALL_ARG3(x)		"c" ((unsigned long)(x))
+#define PVOP_CALL_ARG1(x) "a"((unsigned long)(x))
+#define PVOP_CALL_ARG2(x) "d"((unsigned long)(x))
+#define PVOP_CALL_ARG3(x) "c"((unsigned long)(x))
 
-#define PVOP_VCALL_CLOBBERS		"=a" (__eax), "=d" (__edx),	\
-					"=c" (__ecx)
-#define PVOP_CALL_CLOBBERS		PVOP_VCALL_CLOBBERS
+#define PVOP_VCALL_CLOBBERS "=a"(__eax), "=d"(__edx), "=c"(__ecx)
+#define PVOP_CALL_CLOBBERS PVOP_VCALL_CLOBBERS
 
-#define PVOP_VCALLEE_CLOBBERS		"=a" (__eax), "=d" (__edx)
-#define PVOP_CALLEE_CLOBBERS		PVOP_VCALLEE_CLOBBERS
+#define PVOP_VCALLEE_CLOBBERS "=a"(__eax), "=d"(__edx)
+#define PVOP_CALLEE_CLOBBERS PVOP_VCALLEE_CLOBBERS
 
 #define EXTRA_CLOBBERS
 #define VEXTRA_CLOBBERS
-#else  /* CONFIG_X86_64 */
+#else /* CONFIG_X86_64 */
 /* [re]ax isn't an arg, but the return val */
-#define PVOP_CALL_ARGS						\
-	unsigned long __edi = __edi, __esi = __esi,		\
-		__edx = __edx, __ecx = __ecx, __eax = __eax;
+#define PVOP_CALL_ARGS                                             \
+	unsigned long __edi = __edi, __esi = __esi, __edx = __edx, \
+		      __ecx = __ecx, __eax = __eax;
 
-#define PVOP_CALL_ARG1(x)		"D" ((unsigned long)(x))
-#define PVOP_CALL_ARG2(x)		"S" ((unsigned long)(x))
-#define PVOP_CALL_ARG3(x)		"d" ((unsigned long)(x))
-#define PVOP_CALL_ARG4(x)		"c" ((unsigned long)(x))
+#define PVOP_CALL_ARG1(x) "D"((unsigned long)(x))
+#define PVOP_CALL_ARG2(x) "S"((unsigned long)(x))
+#define PVOP_CALL_ARG3(x) "d"((unsigned long)(x))
+#define PVOP_CALL_ARG4(x) "c"((unsigned long)(x))
 
-#define PVOP_VCALL_CLOBBERS	"=D" (__edi),				\
-				"=S" (__esi), "=d" (__edx),		\
-				"=c" (__ecx)
-#define PVOP_CALL_CLOBBERS	PVOP_VCALL_CLOBBERS, "=a" (__eax)
+#define PVOP_VCALL_CLOBBERS "=D"(__edi), "=S"(__esi), "=d"(__edx), "=c"(__ecx)
+#define PVOP_CALL_CLOBBERS PVOP_VCALL_CLOBBERS, "=a"(__eax)
 
 /*
  * void functions are still allowed [re]ax for scratch.
@@ -397,155 +388,155 @@ int paravirt_disable_iospace(void);
  * registers. Make sure we model this with the appropriate clobbers.
  */
 #ifdef CONFIG_ZERO_CALL_USED_REGS
-#define PVOP_VCALLEE_CLOBBERS	"=a" (__eax), PVOP_VCALL_CLOBBERS
+#define PVOP_VCALLEE_CLOBBERS "=a"(__eax), PVOP_VCALL_CLOBBERS
 #else
-#define PVOP_VCALLEE_CLOBBERS	"=a" (__eax)
+#define PVOP_VCALLEE_CLOBBERS "=a"(__eax)
 #endif
-#define PVOP_CALLEE_CLOBBERS	PVOP_VCALLEE_CLOBBERS
+#define PVOP_CALLEE_CLOBBERS PVOP_VCALLEE_CLOBBERS
 
-#define EXTRA_CLOBBERS	 , "r8", "r9", "r10", "r11"
-#define VEXTRA_CLOBBERS	 , "rax", "r8", "r9", "r10", "r11"
-#endif	/* CONFIG_X86_32 */
+#define EXTRA_CLOBBERS , "r8", "r9", "r10", "r11"
+#define VEXTRA_CLOBBERS , "rax", "r8", "r9", "r10", "r11"
+#endif /* CONFIG_X86_32 */
 
 #ifdef CONFIG_PARAVIRT_DEBUG
-#define PVOP_TEST_NULL(op)	BUG_ON(pv_ops.op == NULL)
+#define PVOP_TEST_NULL(op) BUG_ON(pv_ops.op == NULL)
 #else
-#define PVOP_TEST_NULL(op)	((void)pv_ops.op)
+#define PVOP_TEST_NULL(op) ((void)pv_ops.op)
 #endif
 
-#define PVOP_RETVAL(rettype)						\
-	({	unsigned long __mask = ~0UL;				\
-		BUILD_BUG_ON(sizeof(rettype) > sizeof(unsigned long));	\
-		switch (sizeof(rettype)) {				\
-		case 1: __mask =       0xffUL; break;			\
-		case 2: __mask =     0xffffUL; break;			\
-		case 4: __mask = 0xffffffffUL; break;			\
-		default: break;						\
-		}							\
-		__mask & __eax;						\
+#define PVOP_RETVAL(rettype)                                           \
+	({                                                             \
+		unsigned long __mask = ~0UL;                           \
+		BUILD_BUG_ON(sizeof(rettype) > sizeof(unsigned long)); \
+		switch (sizeof(rettype)) {                             \
+		case 1:                                                \
+			__mask = 0xffUL;                               \
+			break;                                         \
+		case 2:                                                \
+			__mask = 0xffffUL;                             \
+			break;                                         \
+		case 4:                                                \
+			__mask = 0xffffffffUL;                         \
+			break;                                         \
+		default:                                               \
+			break;                                         \
+		}                                                      \
+		__mask &__eax;                                         \
 	})
 
-
-#define ____PVOP_CALL(ret, op, call_clbr, extra_clbr, ...)	\
-	({								\
-		PVOP_CALL_ARGS;						\
-		PVOP_TEST_NULL(op);					\
-		asm volatile(paravirt_alt(PARAVIRT_CALL)		\
-			     : call_clbr, ASM_CALL_CONSTRAINT		\
-			     : paravirt_type(op),			\
-			       ##__VA_ARGS__				\
-			     : "memory", "cc" extra_clbr);		\
-		ret;							\
+/*
+ * Use alternative patching for paravirt calls:
+ * - For replacing an indirect call with a direct one, use the "normal"
+ *   ALTERNATIVE() macro with the indirect call as the initial code sequence,
+ *   which will be replaced with the related direct call by using the
+ *   ALT_FLAG_DIRECT_CALL special case and the "always on" feature.
+ * - In case the replacement is either a direct call or a short code sequence
+ *   depending on a feature bit, the ALTERNATIVE_2() macro is being used.
+ *   The indirect call is the initial code sequence again, while the special
+ *   code sequence is selected with the specified feature bit. In case the
+ *   feature is not active, the direct call is used as above via the
+ *   ALT_FLAG_DIRECT_CALL special case and the "always on" feature.
+ */
+#define ____PVOP_CALL(ret, op, call_clbr, extra_clbr, ...)              \
+	({                                                              \
+		PVOP_CALL_ARGS;                                         \
+		PVOP_TEST_NULL(op);                                     \
+		asm volatile(ALTERNATIVE(PARAVIRT_CALL, ALT_CALL_INSTR, \
+					 ALT_CALL_ALWAYS)               \
+			     : call_clbr, ASM_CALL_CONSTRAINT           \
+			     : paravirt_ptr(op), ##__VA_ARGS__          \
+			     : "memory", "cc" extra_clbr);              \
+		ret;                                                    \
 	})
 
-#define ____PVOP_ALT_CALL(ret, op, alt, cond, call_clbr,		\
-			  extra_clbr, ...)				\
-	({								\
-		PVOP_CALL_ARGS;						\
-		PVOP_TEST_NULL(op);					\
-		asm volatile(ALTERNATIVE(paravirt_alt(PARAVIRT_CALL),	\
-					 alt, cond)			\
-			     : call_clbr, ASM_CALL_CONSTRAINT		\
-			     : paravirt_type(op),			\
-			       ##__VA_ARGS__				\
-			     : "memory", "cc" extra_clbr);		\
-		ret;							\
+#define ____PVOP_ALT_CALL(ret, op, alt, cond, call_clbr, extra_clbr, ...) \
+	({                                                                \
+		PVOP_CALL_ARGS;                                           \
+		PVOP_TEST_NULL(op);                                       \
+		asm volatile(ALTERNATIVE_2(PARAVIRT_CALL, ALT_CALL_INSTR, \
+					   ALT_CALL_ALWAYS, alt, cond)    \
+			     : call_clbr, ASM_CALL_CONSTRAINT             \
+			     : paravirt_ptr(op), ##__VA_ARGS__            \
+			     : "memory", "cc" extra_clbr);                \
+		ret;                                                      \
 	})
 
-#define __PVOP_CALL(rettype, op, ...)					\
-	____PVOP_CALL(PVOP_RETVAL(rettype), op,				\
-		      PVOP_CALL_CLOBBERS, EXTRA_CLOBBERS, ##__VA_ARGS__)
+#define __PVOP_CALL(rettype, op, ...)                               \
+	____PVOP_CALL(PVOP_RETVAL(rettype), op, PVOP_CALL_CLOBBERS, \
+		      EXTRA_CLOBBERS, ##__VA_ARGS__)
 
-#define __PVOP_ALT_CALL(rettype, op, alt, cond, ...)			\
-	____PVOP_ALT_CALL(PVOP_RETVAL(rettype), op, alt, cond,		\
-			  PVOP_CALL_CLOBBERS, EXTRA_CLOBBERS,		\
-			  ##__VA_ARGS__)
+#define __PVOP_ALT_CALL(rettype, op, alt, cond, ...)           \
+	____PVOP_ALT_CALL(PVOP_RETVAL(rettype), op, alt, cond, \
+			  PVOP_CALL_CLOBBERS, EXTRA_CLOBBERS, ##__VA_ARGS__)
 
-#define __PVOP_CALLEESAVE(rettype, op, ...)				\
-	____PVOP_CALL(PVOP_RETVAL(rettype), op.func,			\
-		      PVOP_CALLEE_CLOBBERS, , ##__VA_ARGS__)
+#define __PVOP_CALLEESAVE(rettype, op, ...)                                  \
+	____PVOP_CALL(PVOP_RETVAL(rettype), op.func, PVOP_CALLEE_CLOBBERS, , \
+		      ##__VA_ARGS__)
 
-#define __PVOP_ALT_CALLEESAVE(rettype, op, alt, cond, ...)		\
-	____PVOP_ALT_CALL(PVOP_RETVAL(rettype), op.func, alt, cond,	\
+#define __PVOP_ALT_CALLEESAVE(rettype, op, alt, cond, ...)          \
+	____PVOP_ALT_CALL(PVOP_RETVAL(rettype), op.func, alt, cond, \
 			  PVOP_CALLEE_CLOBBERS, , ##__VA_ARGS__)
 
+#define __PVOP_VCALL(op, ...)                                           \
+	(void)____PVOP_CALL(, op, PVOP_VCALL_CLOBBERS, VEXTRA_CLOBBERS, \
+			    ##__VA_ARGS__)
 
-#define __PVOP_VCALL(op, ...)						\
-	(void)____PVOP_CALL(, op, PVOP_VCALL_CLOBBERS,			\
-		       VEXTRA_CLOBBERS, ##__VA_ARGS__)
+#define __PVOP_ALT_VCALL(op, alt, cond, ...)                          \
+	(void)____PVOP_ALT_CALL(, op, alt, cond, PVOP_VCALL_CLOBBERS, \
+				VEXTRA_CLOBBERS, ##__VA_ARGS__)
 
-#define __PVOP_ALT_VCALL(op, alt, cond, ...)				\
-	(void)____PVOP_ALT_CALL(, op, alt, cond,			\
-				PVOP_VCALL_CLOBBERS, VEXTRA_CLOBBERS,	\
+#define __PVOP_VCALLEESAVE(op, ...) \
+	(void)____PVOP_CALL(, op.func, PVOP_VCALLEE_CLOBBERS, , ##__VA_ARGS__)
+
+#define __PVOP_ALT_VCALLEESAVE(op, alt, cond, ...)                             \
+	(void)____PVOP_ALT_CALL(, op.func, alt, cond, PVOP_VCALLEE_CLOBBERS, , \
 				##__VA_ARGS__)
 
-#define __PVOP_VCALLEESAVE(op, ...)					\
-	(void)____PVOP_CALL(, op.func,					\
-			    PVOP_VCALLEE_CLOBBERS, , ##__VA_ARGS__)
-
-#define __PVOP_ALT_VCALLEESAVE(op, alt, cond, ...)			\
-	(void)____PVOP_ALT_CALL(, op.func, alt, cond,			\
-				PVOP_VCALLEE_CLOBBERS, , ##__VA_ARGS__)
-
-
-#define PVOP_CALL0(rettype, op)						\
-	__PVOP_CALL(rettype, op)
-#define PVOP_VCALL0(op)							\
-	__PVOP_VCALL(op)
-#define PVOP_ALT_CALL0(rettype, op, alt, cond)				\
+#define PVOP_CALL0(rettype, op) __PVOP_CALL(rettype, op)
+#define PVOP_VCALL0(op) __PVOP_VCALL(op)
+#define PVOP_ALT_CALL0(rettype, op, alt, cond) \
 	__PVOP_ALT_CALL(rettype, op, alt, cond)
-#define PVOP_ALT_VCALL0(op, alt, cond)					\
-	__PVOP_ALT_VCALL(op, alt, cond)
+#define PVOP_ALT_VCALL0(op, alt, cond) __PVOP_ALT_VCALL(op, alt, cond)
 
-#define PVOP_CALLEE0(rettype, op)					\
-	__PVOP_CALLEESAVE(rettype, op)
-#define PVOP_VCALLEE0(op)						\
-	__PVOP_VCALLEESAVE(op)
-#define PVOP_ALT_CALLEE0(rettype, op, alt, cond)			\
+#define PVOP_CALLEE0(rettype, op) __PVOP_CALLEESAVE(rettype, op)
+#define PVOP_VCALLEE0(op) __PVOP_VCALLEESAVE(op)
+#define PVOP_ALT_CALLEE0(rettype, op, alt, cond) \
 	__PVOP_ALT_CALLEESAVE(rettype, op, alt, cond)
-#define PVOP_ALT_VCALLEE0(op, alt, cond)				\
-	__PVOP_ALT_VCALLEESAVE(op, alt, cond)
+#define PVOP_ALT_VCALLEE0(op, alt, cond) __PVOP_ALT_VCALLEESAVE(op, alt, cond)
 
-
-#define PVOP_CALL1(rettype, op, arg1)					\
+#define PVOP_CALL1(rettype, op, arg1) \
 	__PVOP_CALL(rettype, op, PVOP_CALL_ARG1(arg1))
-#define PVOP_VCALL1(op, arg1)						\
-	__PVOP_VCALL(op, PVOP_CALL_ARG1(arg1))
-#define PVOP_ALT_VCALL1(op, arg1, alt, cond)				\
+#define PVOP_VCALL1(op, arg1) __PVOP_VCALL(op, PVOP_CALL_ARG1(arg1))
+#define PVOP_ALT_VCALL1(op, arg1, alt, cond) \
 	__PVOP_ALT_VCALL(op, alt, cond, PVOP_CALL_ARG1(arg1))
 
-#define PVOP_CALLEE1(rettype, op, arg1)					\
+#define PVOP_CALLEE1(rettype, op, arg1) \
 	__PVOP_CALLEESAVE(rettype, op, PVOP_CALL_ARG1(arg1))
-#define PVOP_VCALLEE1(op, arg1)						\
-	__PVOP_VCALLEESAVE(op, PVOP_CALL_ARG1(arg1))
-#define PVOP_ALT_CALLEE1(rettype, op, arg1, alt, cond)			\
+#define PVOP_VCALLEE1(op, arg1) __PVOP_VCALLEESAVE(op, PVOP_CALL_ARG1(arg1))
+#define PVOP_ALT_CALLEE1(rettype, op, arg1, alt, cond) \
 	__PVOP_ALT_CALLEESAVE(rettype, op, alt, cond, PVOP_CALL_ARG1(arg1))
-#define PVOP_ALT_VCALLEE1(op, arg1, alt, cond)				\
+#define PVOP_ALT_VCALLEE1(op, arg1, alt, cond) \
 	__PVOP_ALT_VCALLEESAVE(op, alt, cond, PVOP_CALL_ARG1(arg1))
 
-
-#define PVOP_CALL2(rettype, op, arg1, arg2)				\
+#define PVOP_CALL2(rettype, op, arg1, arg2) \
 	__PVOP_CALL(rettype, op, PVOP_CALL_ARG1(arg1), PVOP_CALL_ARG2(arg2))
-#define PVOP_VCALL2(op, arg1, arg2)					\
+#define PVOP_VCALL2(op, arg1, arg2) \
 	__PVOP_VCALL(op, PVOP_CALL_ARG1(arg1), PVOP_CALL_ARG2(arg2))
 
-#define PVOP_CALL3(rettype, op, arg1, arg2, arg3)			\
-	__PVOP_CALL(rettype, op, PVOP_CALL_ARG1(arg1),			\
-		    PVOP_CALL_ARG2(arg2), PVOP_CALL_ARG3(arg3))
-#define PVOP_VCALL3(op, arg1, arg2, arg3)				\
-	__PVOP_VCALL(op, PVOP_CALL_ARG1(arg1),				\
-		     PVOP_CALL_ARG2(arg2), PVOP_CALL_ARG3(arg3))
+#define PVOP_CALL3(rettype, op, arg1, arg2, arg3)                            \
+	__PVOP_CALL(rettype, op, PVOP_CALL_ARG1(arg1), PVOP_CALL_ARG2(arg2), \
+		    PVOP_CALL_ARG3(arg3))
+#define PVOP_VCALL3(op, arg1, arg2, arg3)                            \
+	__PVOP_VCALL(op, PVOP_CALL_ARG1(arg1), PVOP_CALL_ARG2(arg2), \
+		     PVOP_CALL_ARG3(arg3))
 
-#define PVOP_CALL4(rettype, op, arg1, arg2, arg3, arg4)			\
-	__PVOP_CALL(rettype, op,					\
-		    PVOP_CALL_ARG1(arg1), PVOP_CALL_ARG2(arg2),		\
+#define PVOP_CALL4(rettype, op, arg1, arg2, arg3, arg4)                      \
+	__PVOP_CALL(rettype, op, PVOP_CALL_ARG1(arg1), PVOP_CALL_ARG2(arg2), \
 		    PVOP_CALL_ARG3(arg3), PVOP_CALL_ARG4(arg4))
-#define PVOP_VCALL4(op, arg1, arg2, arg3, arg4)				\
-	__PVOP_VCALL(op, PVOP_CALL_ARG1(arg1), PVOP_CALL_ARG2(arg2),	\
+#define PVOP_VCALL4(op, arg1, arg2, arg3, arg4)                      \
+	__PVOP_VCALL(op, PVOP_CALL_ARG1(arg1), PVOP_CALL_ARG2(arg2), \
 		     PVOP_CALL_ARG3(arg3), PVOP_CALL_ARG4(arg4))
 
-void _paravirt_nop(void);
-void paravirt_BUG(void);
 unsigned long paravirt_ret0(void);
 #ifdef CONFIG_PARAVIRT_XXL
 u64 _paravirt_ident_64(u64);
@@ -555,11 +546,11 @@ void pv_native_irq_enable(void);
 unsigned long pv_native_read_cr2(void);
 #endif
 
-#define paravirt_nop	((void *)_paravirt_nop)
+#define paravirt_nop ((void *)nop_func)
 
-extern struct paravirt_patch_site __parainstructions[],
-	__parainstructions_end[];
+#endif /* __ASSEMBLY__ */
 
-#endif	/* __ASSEMBLY__ */
-#endif  /* CONFIG_PARAVIRT */
-#endif	/* _ASM_X86_PARAVIRT_TYPES_H */
+#define ALT_NOT_XEN ALT_NOT(X86_FEATURE_XENPV)
+
+#endif /* CONFIG_PARAVIRT */
+#endif /* _ASM_X86_PARAVIRT_TYPES_H */

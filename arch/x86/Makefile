@@ -113,6 +113,13 @@ ifeq ($(CONFIG_X86_32),y)
         KBUILD_CFLAGS += -ffreestanding
 
 	percpu_seg := fs
+    ifeq ($(CONFIG_STACKPROTECTOR),y)
+        ifeq ($(CONFIG_SMP),y)
+			KBUILD_CFLAGS += -mstack-protector-guard-reg=fs -mstack-protector-guard-symbol=__stack_chk_guard
+        else
+			KBUILD_CFLAGS += -mstack-protector-guard=global
+        endif
+    endif
 else
         BITS := 64
         UTS_MACHINE := x86_64

@@ -30,19 +30,20 @@
 #include <asm/fixmap.h>
 #include <asm/paravirt.h>
 #include <asm/asm-prototypes.h>
+#include <asm/cfi.h>
 
 int __read_mostly alternatives_patched;
 
 EXPORT_SYMBOL_GPL(alternatives_patched);
 
-#define MAX_PATCH_LEN (255-1)
+#define MAX_PATCH_LEN (255 - 1)
 
-#define DA_ALL		(~0)
-#define DA_ALT		0x01
-#define DA_RET		0x02
-#define DA_RETPOLINE	0x04
-#define DA_ENDBR	0x08
-#define DA_SMP		0x10
+#define DA_ALL (~0)
+#define DA_ALT 0x01
+#define DA_RET 0x02
+#define DA_RETPOLINE 0x04
+#define DA_ENDBR 0x08
+#define DA_SMP 0x10
 
 static unsigned int debug_alternative;
 
@@ -67,46 +68,36 @@ static int __init setup_noreplace_smp(char *str)
 }
 __setup("noreplace-smp", setup_noreplace_smp);
 
-#define DPRINTK(type, fmt, args...)					\
-do {									\
-	if (debug_alternative & DA_##type)				\
-		printk(KERN_DEBUG pr_fmt(fmt) "\n", ##args);		\
-} while (0)
+#define DPRINTK(type, fmt, args...)                                  \
+	do {                                                         \
+		if (debug_alternative & DA_##type)                   \
+			printk(KERN_DEBUG pr_fmt(fmt) "\n", ##args); \
+	} while (0)
 
-#define DUMP_BYTES(type, buf, len, fmt, args...)			\
-do {									\
-	if (unlikely(debug_alternative & DA_##type)) {			\
-		int j;							\
-									\
-		if (!(len))						\
-			break;						\
-									\
-		printk(KERN_DEBUG pr_fmt(fmt), ##args);			\
-		for (j = 0; j < (len) - 1; j++)				\
-			printk(KERN_CONT "%02hhx ", buf[j]);		\
-		printk(KERN_CONT "%02hhx\n", buf[j]);			\
-	}								\
-} while (0)
+#define DUMP_BYTES(type, buf, len, fmt, args...)                     \
+	do {                                                         \
+		if (unlikely(debug_alternative & DA_##type)) {       \
+			int j;                                       \
+                                                                     \
+			if (!(len))                                  \
+				break;                               \
+                                                                     \
+			printk(KERN_DEBUG pr_fmt(fmt), ##args);      \
+			for (j = 0; j < (len)-1; j++)                \
+				printk(KERN_CONT "%02hhx ", buf[j]); \
+			printk(KERN_CONT "%02hhx\n", buf[j]);        \
+		}                                                    \
+	} while (0)
 
-static const unsigned char x86nops[] =
-{
-	BYTES_NOP1,
-	BYTES_NOP2,
-	BYTES_NOP3,
-	BYTES_NOP4,
-	BYTES_NOP5,
-	BYTES_NOP6,
-	BYTES_NOP7,
-	BYTES_NOP8,
+static const unsigned char x86nops[] = {
+	BYTES_NOP1, BYTES_NOP2,	 BYTES_NOP3,  BYTES_NOP4,
+	BYTES_NOP5, BYTES_NOP6,	 BYTES_NOP7,  BYTES_NOP8,
 #ifdef CONFIG_64BIT
-	BYTES_NOP9,
-	BYTES_NOP10,
-	BYTES_NOP11,
+	BYTES_NOP9, BYTES_NOP10, BYTES_NOP11,
 #endif
 };
 
-const unsigned char * const x86_nops[ASM_NOP_MAX+1] =
-{
+const unsigned char *const x86_nops[ASM_NOP_MAX + 1] = {
 	NULL,
 	x86nops,
 	x86nops + 1,
@@ -145,14 +136,16 @@ static void add_nop(u8 *instr, unsigned int len)
 	}
 
 	if (len < 128) {
-		__text_gen_insn(instr, JMP8_INSN_OPCODE, instr, target, JMP8_INSN_SIZE);
+		__text_gen_insn(instr, JMP8_INSN_OPCODE, instr, target,
+				JMP8_INSN_SIZE);
 		instr += JMP8_INSN_SIZE;
 	} else {
-		__text_gen_insn(instr, JMP32_INSN_OPCODE, instr, target, JMP32_INSN_SIZE);
+		__text_gen_insn(instr, JMP32_INSN_OPCODE, instr, target,
+				JMP32_INSN_SIZE);
 		instr += JMP32_INSN_SIZE;
 	}
 
-	for (;instr < target; instr++)
+	for (; instr < target; instr++)
 		*instr = INT3_INSN_OPCODE;
 }
 
@@ -160,7 +153,6 @@ extern s32 __retpoline_sites[], __retpoline_sites_end[];
 extern s32 __return_sites[], __return_sites_end[];
 extern s32 __cfi_sites[], __cfi_sites_end[];
 extern s32 __ibt_endbr_seal[], __ibt_endbr_seal_end[];
-extern struct alt_instr __alt_instructions[], __alt_instructions_end[];
 extern s32 __smp_locks[], __smp_locks_end[];
 void text_poke_early(void *addr, const void *opcode, size_t len);
 
@@ -206,8 +198,8 @@ static int skip_nops(u8 *instr, int offset, int len)
  * Optimize a sequence of NOPs, possibly preceded by an unconditional jump
  * to the end of the NOP sequence into a single NOP.
  */
-static bool
-__optimize_nops(u8 *instr, size_t len, struct insn *insn, int *next, int *prev, int *target)
+static bool __optimize_nops(u8 *instr, size_t len, struct insn *insn, int *next,
+			    int *prev, int *target)
 {
 	int i = *next - insn->length;
 
@@ -227,7 +219,8 @@ __optimize_nops(u8 *instr, size_t len, struct insn *insn, int *next, int *prev, 
 			nop = *prev;
 
 		add_nop(instr + nop, *next - nop);
-		DUMP_BYTES(ALT, instr, len, "%px: [%d:%d) optimized NOPs: ", instr, nop, *next);
+		DUMP_BYTES(ALT, instr, len,
+			   "%px: [%d:%d) optimized NOPs: ", instr, nop, *next);
 		return true;
 	}
 
@@ -253,6 +246,17 @@ static void __init_or_module noinline optimize_nops(u8 *instr, size_t len)
 
 		__optimize_nops(instr, len, &insn, &next, &prev, &target);
 	}
+}
+
+static void __init_or_module noinline optimize_nops_inplace(u8 *instr,
+							    size_t len)
+{
+	unsigned long flags;
+
+	local_irq_save(flags);
+	optimize_nops(instr, len);
+	sync_core();
+	local_irq_restore(flags);
 }
 
 /*
@@ -294,28 +298,33 @@ static void __init_or_module noinline optimize_nops(u8 *instr, size_t len)
  * IOW, only the relative displacement of the code block matters.
  */
 
-#define apply_reloc_n(n_, p_, d_)				\
-	do {							\
-		s32 v = *(s##n_ *)(p_);				\
-		v += (d_);					\
-		BUG_ON((v >> 31) != (v >> (n_-1)));		\
-		*(s##n_ *)(p_) = (s##n_)v;			\
+#define apply_reloc_n(n_, p_, d_)                     \
+	do {                                          \
+		s32 v = *(s##n_ *)(p_);               \
+		v += (d_);                            \
+		BUG_ON((v >> 31) != (v >> (n_ - 1))); \
+		*(s##n_ *)(p_) = (s##n_)v;            \
 	} while (0)
 
-
-static __always_inline
-void apply_reloc(int n, void *ptr, uintptr_t diff)
+static __always_inline void apply_reloc(int n, void *ptr, uintptr_t diff)
 {
 	switch (n) {
-	case 1: apply_reloc_n(8, ptr, diff); break;
-	case 2: apply_reloc_n(16, ptr, diff); break;
-	case 4: apply_reloc_n(32, ptr, diff); break;
-	default: BUG();
+	case 1:
+		apply_reloc_n(8, ptr, diff);
+		break;
+	case 2:
+		apply_reloc_n(16, ptr, diff);
+		break;
+	case 4:
+		apply_reloc_n(32, ptr, diff);
+		break;
+	default:
+		BUG();
 	}
 }
 
-static __always_inline
-bool need_reloc(unsigned long offset, u8 *src, size_t src_len)
+static __always_inline bool need_reloc(unsigned long offset, u8 *src,
+				       size_t src_len)
 {
 	u8 *target = src + offset;
 	/*
@@ -346,15 +355,17 @@ void apply_relocation(u8 *buf, size_t len, u8 *dest, u8 *src, size_t src_len)
 			    insn.opcode.bytes[1] > 0x8f)
 				break;
 
-			fallthrough;	/* Jcc.d32 */
-		case 0x70 ... 0x7f:	/* Jcc.d8 */
+			fallthrough; /* Jcc.d32 */
+		case 0x70 ... 0x7f: /* Jcc.d8 */
 		case JMP8_INSN_OPCODE:
 		case JMP32_INSN_OPCODE:
 		case CALL_INSN_OPCODE:
-			if (need_reloc(next + insn.immediate.value, src, src_len)) {
-				apply_reloc(insn.immediate.nbytes,
-					    buf + i + insn_offset_immediate(&insn),
-					    src - dest);
+			if (need_reloc(next + insn.immediate.value, src,
+				       src_len)) {
+				apply_reloc(
+					insn.immediate.nbytes,
+					buf + i + insn_offset_immediate(&insn),
+					src - dest);
 			}
 
 			/*
@@ -365,23 +376,83 @@ void apply_relocation(u8 *buf, size_t len, u8 *dest, u8 *src, size_t src_len)
 				imm += src - dest;
 				imm += JMP32_INSN_SIZE - JMP8_INSN_SIZE;
 				if ((imm >> 31) == (imm >> 7)) {
-					buf[i+0] = JMP8_INSN_OPCODE;
-					buf[i+1] = (s8)imm;
+					buf[i + 0] = JMP8_INSN_OPCODE;
+					buf[i + 1] = (s8)imm;
 
-					memset(&buf[i+2], INT3_INSN_OPCODE, insn.length - 2);
+					memset(&buf[i + 2], INT3_INSN_OPCODE,
+					       insn.length - 2);
 				}
 			}
 			break;
 		}
 
 		if (insn_rip_relative(&insn)) {
-			if (need_reloc(next + insn.displacement.value, src, src_len)) {
-				apply_reloc(insn.displacement.nbytes,
-					    buf + i + insn_offset_displacement(&insn),
-					    src - dest);
+			if (need_reloc(next + insn.displacement.value, src,
+				       src_len)) {
+				apply_reloc(
+					insn.displacement.nbytes,
+					buf + i +
+						insn_offset_displacement(&insn),
+					src - dest);
 			}
 		}
 	}
+}
+
+/* Low-level backend functions usable from alternative code replacements. */
+DEFINE_ASM_FUNC(nop_func, "", .entry.text);
+EXPORT_SYMBOL_GPL(nop_func);
+
+noinstr void BUG_func(void)
+{
+	BUG();
+}
+EXPORT_SYMBOL(BUG_func);
+
+#define CALL_RIP_REL_OPCODE 0xff
+#define CALL_RIP_REL_MODRM 0x15
+
+/*
+ * Rewrite the "call BUG_func" replacement to point to the target of the
+ * indirect pv_ops call "call *disp(%ip)".
+ */
+static int alt_replace_call(u8 *instr, u8 *insn_buff, struct alt_instr *a)
+{
+	void *target, *bug = &BUG_func;
+	s32 disp;
+
+	if (a->replacementlen != 5 || insn_buff[0] != CALL_INSN_OPCODE) {
+		pr_err("ALT_FLAG_DIRECT_CALL set for a non-call replacement instruction\n");
+		BUG();
+	}
+
+	if (a->instrlen != 6 || instr[0] != CALL_RIP_REL_OPCODE ||
+	    instr[1] != CALL_RIP_REL_MODRM) {
+		pr_err("ALT_FLAG_DIRECT_CALL set for unrecognized indirect call\n");
+		BUG();
+	}
+
+	/* Skip CALL_RIP_REL_OPCODE and CALL_RIP_REL_MODRM */
+	disp = *(s32 *)(instr + 2);
+#ifdef CONFIG_X86_64
+	/* ff 15 00 00 00 00   call   *0x0(%rip) */
+	/* target address is stored at "next instruction + disp". */
+	target = *(void **)(instr + a->instrlen + disp);
+#else
+	/* ff 15 00 00 00 00   call   *0x0 */
+	/* target address is stored at disp. */
+	target = *(void **)disp;
+#endif
+	if (!target)
+		target = bug;
+
+	/* (BUG_func - .) + (target - BUG_func) := target - . */
+	*(s32 *)(insn_buff + 1) += target - bug;
+
+	if (target == &nop_func)
+		return 0;
+
+	return 5;
 }
 
 /*
@@ -437,28 +508,35 @@ void __init_or_module noinline apply_alternatives(struct alt_instr *start,
 		 *   patch if feature is *NOT* present.
 		 */
 		if (!boot_cpu_has(a->cpuid) == !(a->flags & ALT_FLAG_NOT)) {
-			optimize_nops(instr, a->instrlen);
+			optimize_nops_inplace(instr, a->instrlen);
 			continue;
 		}
 
-		DPRINTK(ALT, "feat: %s%d*32+%d, old: (%pS (%px) len: %d), repl: (%px, len: %d)",
-			(a->flags & ALT_FLAG_NOT) ? "!" : "",
-			a->cpuid >> 5,
-			a->cpuid & 0x1f,
-			instr, instr, a->instrlen,
-			replacement, a->replacementlen);
+		DPRINTK(ALT,
+			"feat: %d*32+%d, old: (%pS (%px) len: %d), repl: (%px, len: %d) flags: 0x%x",
+			a->cpuid >> 5, a->cpuid & 0x1f, instr, instr,
+			a->instrlen, replacement, a->replacementlen, a->flags);
 
 		memcpy(insn_buff, replacement, a->replacementlen);
 		insn_buff_sz = a->replacementlen;
 
+		if (a->flags & ALT_FLAG_DIRECT_CALL) {
+			insn_buff_sz = alt_replace_call(instr, insn_buff, a);
+			if (insn_buff_sz < 0)
+				continue;
+		}
+
 		for (; insn_buff_sz < a->instrlen; insn_buff_sz++)
 			insn_buff[insn_buff_sz] = 0x90;
 
-		apply_relocation(insn_buff, a->instrlen, instr, replacement, a->replacementlen);
+		apply_relocation(insn_buff, a->instrlen, instr, replacement,
+				 a->replacementlen);
 
 		DUMP_BYTES(ALT, instr, a->instrlen, "%px:   old_insn: ", instr);
-		DUMP_BYTES(ALT, replacement, a->replacementlen, "%px:   rpl_insn: ", replacement);
-		DUMP_BYTES(ALT, insn_buff, insn_buff_sz, "%px: final_insn: ", instr);
+		DUMP_BYTES(ALT, replacement, a->replacementlen,
+			   "%px:   rpl_insn: ", replacement);
+		DUMP_BYTES(ALT, insn_buff, insn_buff_sz,
+			   "%px: final_insn: ", instr);
 
 		text_poke_early(instr, insn_buff, insn_buff_sz);
 	}
@@ -469,7 +547,8 @@ void __init_or_module noinline apply_alternatives(struct alt_instr *start,
 static inline bool is_jcc32(struct insn *insn)
 {
 	/* Jcc.d32 second opcode byte is in the range: 0x80-0x8f */
-	return insn->opcode.bytes[0] == 0x0f && (insn->opcode.bytes[1] & 0xf0) == 0x80;
+	return insn->opcode.bytes[0] == 0x0f &&
+	       (insn->opcode.bytes[1] & 0xf0) == 0x80;
 }
 
 #if defined(CONFIG_RETPOLINE) && defined(CONFIG_OBJTOOL)
@@ -510,7 +589,8 @@ static int emit_indirect(int op, int reg, u8 *bytes)
 	return i;
 }
 
-static int emit_call_track_retpoline(void *addr, struct insn *insn, int reg, u8 *bytes)
+static int emit_call_track_retpoline(void *addr, struct insn *insn, int reg,
+				     u8 *bytes)
 {
 	u8 op = insn->opcode.bytes[0];
 	int i = 0;
@@ -530,7 +610,7 @@ static int emit_call_track_retpoline(void *addr, struct insn *insn, int reg, u8 
 
 	switch (op) {
 	case CALL_INSN_OPCODE:
-		__text_gen_insn(bytes+i, op, addr+i,
+		__text_gen_insn(bytes + i, op, addr + i,
 				__x86_indirect_call_thunk_array[reg],
 				CALL_INSN_SIZE);
 		i += CALL_INSN_SIZE;
@@ -538,7 +618,7 @@ static int emit_call_track_retpoline(void *addr, struct insn *insn, int reg, u8 
 
 	case JMP32_INSN_OPCODE:
 clang_jcc:
-		__text_gen_insn(bytes+i, op, addr+i,
+		__text_gen_insn(bytes + i, op, addr + i,
 				__x86_indirect_jump_thunk_array[reg],
 				JMP32_INSN_SIZE);
 		i += JMP32_INSN_SIZE;
@@ -588,7 +668,8 @@ static int patch_retpoline(void *addr, struct insn *insn, u8 *bytes)
 	if (cpu_feature_enabled(X86_FEATURE_RETPOLINE) &&
 	    !cpu_feature_enabled(X86_FEATURE_RETPOLINE_LFENCE)) {
 		if (cpu_feature_enabled(X86_FEATURE_CALL_DEPTH))
-			return emit_call_track_retpoline(addr, insn, reg, bytes);
+			return emit_call_track_retpoline(addr, insn, reg,
+							 bytes);
 
 		return -1;
 	}
@@ -612,7 +693,7 @@ static int patch_retpoline(void *addr, struct insn *insn, u8 *bytes)
 		cc = insn->opcode.bytes[1] & 0xf;
 		cc ^= 1; /* invert condition */
 
-		bytes[i++] = 0x70 + cc;        /* Jcc.d8 */
+		bytes[i++] = 0x70 + cc; /* Jcc.d8 */
 		bytes[i++] = insn->length - 2; /* sizeof(Jcc.d8) == 2 */
 
 		/* Continue as if: JMP.d32 __x86_indirect_thunk_\reg */
@@ -690,8 +771,10 @@ void __init_or_module noinline apply_retpolines(s32 *start, s32 *end)
 		len = patch_retpoline(addr, &insn, bytes);
 		if (len == insn.length) {
 			optimize_nops(bytes, len);
-			DUMP_BYTES(RETPOLINE, ((u8*)addr),  len, "%px: orig: ", addr);
-			DUMP_BYTES(RETPOLINE, ((u8*)bytes), len, "%px: repl: ", addr);
+			DUMP_BYTES(RETPOLINE, ((u8 *)addr), len,
+				   "%px: orig: ", addr);
+			DUMP_BYTES(RETPOLINE, ((u8 *)bytes), len,
+				   "%px: repl: ", addr);
 			text_poke_early(addr, bytes, len);
 		}
 	}
@@ -717,7 +800,8 @@ static int patch_return(void *addr, struct insn *insn, u8 *bytes)
 	/* Patch the custom return thunks... */
 	if (cpu_feature_enabled(X86_FEATURE_RETHUNK)) {
 		i = JMP32_INSN_SIZE;
-		__text_gen_insn(bytes, JMP32_INSN_OPCODE, addr, x86_return_thunk, i);
+		__text_gen_insn(bytes, JMP32_INSN_OPCODE, addr,
+				x86_return_thunk, i);
 	} else {
 		/* ... or patch them out if not needed. */
 		bytes[i++] = RET_INSN_OPCODE;
@@ -752,30 +836,37 @@ void __init_or_module noinline apply_returns(s32 *start, s32 *end)
 
 		if (__static_call_fixup(addr, op, dest) ||
 		    WARN_ONCE(dest != &__x86_return_thunk,
-			      "missing return thunk: %pS-%pS: %*ph",
-			      addr, dest, 5, addr))
+			      "missing return thunk: %pS-%pS: %*ph", addr, dest,
+			      5, addr))
 			continue;
 
-		DPRINTK(RET, "return thunk at: %pS (%px) len: %d to: %pS",
-			addr, addr, insn.length,
+		DPRINTK(RET, "return thunk at: %pS (%px) len: %d to: %pS", addr,
+			addr, insn.length,
 			addr + insn.length + insn.immediate.value);
 
 		len = patch_return(addr, &insn, bytes);
 		if (len == insn.length) {
-			DUMP_BYTES(RET, ((u8*)addr),  len, "%px: orig: ", addr);
-			DUMP_BYTES(RET, ((u8*)bytes), len, "%px: repl: ", addr);
+			DUMP_BYTES(RET, ((u8 *)addr), len, "%px: orig: ", addr);
+			DUMP_BYTES(RET, ((u8 *)bytes), len,
+				   "%px: repl: ", addr);
 			text_poke_early(addr, bytes, len);
 		}
 	}
 }
 #else
-void __init_or_module noinline apply_returns(s32 *start, s32 *end) { }
+void __init_or_module noinline apply_returns(s32 *start, s32 *end)
+{
+}
 #endif /* CONFIG_RETHUNK */
 
 #else /* !CONFIG_RETPOLINE || !CONFIG_OBJTOOL */
 
-void __init_or_module noinline apply_retpolines(s32 *start, s32 *end) { }
-void __init_or_module noinline apply_returns(s32 *start, s32 *end) { }
+void __init_or_module noinline apply_retpolines(s32 *start, s32 *end)
+{
+}
+void __init_or_module noinline apply_returns(s32 *start, s32 *end)
+{
+}
 
 #endif /* CONFIG_RETPOLINE && CONFIG_OBJTOOL */
 
@@ -800,8 +891,8 @@ static void __init_or_module poison_endbr(void *addr, bool warn)
 	/*
 	 * When we have IBT, the lack of ENDBR will trigger #CP
 	 */
-	DUMP_BYTES(ENDBR, ((u8*)addr), 4, "%px: orig: ", addr);
-	DUMP_BYTES(ENDBR, ((u8*)&poison), 4, "%px: repl: ", addr);
+	DUMP_BYTES(ENDBR, ((u8 *)addr), 4, "%px: orig: ", addr);
+	DUMP_BYTES(ENDBR, ((u8 *)&poison), 4, "%px: repl: ", addr);
 	text_poke_early(addr, &poison, 4);
 }
 
@@ -826,22 +917,87 @@ void __init_or_module noinline apply_seal_endbr(s32 *start, s32 *end)
 
 #else
 
-void __init_or_module apply_seal_endbr(s32 *start, s32 *end) { }
+void __init_or_module apply_seal_endbr(s32 *start, s32 *end)
+{
+}
 
 #endif /* CONFIG_X86_KERNEL_IBT */
 
 #ifdef CONFIG_FINEIBT
+#define __CFI_DEFAULT CFI_DEFAULT
+#elif defined(CONFIG_CFI_CLANG)
+#define __CFI_DEFAULT CFI_KCFI
+#else
+#define __CFI_DEFAULT CFI_OFF
+#endif
 
-enum cfi_mode {
-	CFI_DEFAULT,
-	CFI_OFF,
-	CFI_KCFI,
-	CFI_FINEIBT,
-};
+enum cfi_mode cfi_mode __ro_after_init = __CFI_DEFAULT;
 
-static enum cfi_mode cfi_mode __ro_after_init = CFI_DEFAULT;
+#ifdef CONFIG_CFI_CLANG
+struct bpf_insn;
+
+/* Must match bpf_func_t / DEFINE_BPF_PROG_RUN() */
+extern unsigned int __bpf_prog_runX(const void *ctx,
+				    const struct bpf_insn *insn);
+
+/*
+ * Force a reference to the external symbol so the compiler generates
+ * __kcfi_typid.
+ */
+__ADDRESSABLE(__bpf_prog_runX);
+
+/* u32 __ro_after_init cfi_bpf_hash = __kcfi_typeid___bpf_prog_runX; */
+asm("	.pushsection	.data..ro_after_init,\"aw\",@progbits	\n"
+    "	.type	cfi_bpf_hash,@object				\n"
+    "	.globl	cfi_bpf_hash					\n"
+    "	.p2align	2, 0x0					\n"
+    "cfi_bpf_hash:							\n"
+    "	.long	__kcfi_typeid___bpf_prog_runX			\n"
+    "	.size	cfi_bpf_hash, 4					\n"
+    "	.popsection						\n");
+
+/* Must match bpf_callback_t */
+extern u64 __bpf_callback_fn(u64, u64, u64, u64, u64);
+
+__ADDRESSABLE(__bpf_callback_fn);
+
+/* u32 __ro_after_init cfi_bpf_subprog_hash = __kcfi_typeid___bpf_callback_fn; */
+asm("	.pushsection	.data..ro_after_init,\"aw\",@progbits	\n"
+    "	.type	cfi_bpf_subprog_hash,@object			\n"
+    "	.globl	cfi_bpf_subprog_hash				\n"
+    "	.p2align	2, 0x0					\n"
+    "cfi_bpf_subprog_hash:						\n"
+    "	.long	__kcfi_typeid___bpf_callback_fn			\n"
+    "	.size	cfi_bpf_subprog_hash, 4				\n"
+    "	.popsection						\n");
+
+u32 cfi_get_func_hash(void *func)
+{
+	u32 hash;
+
+	func -= cfi_get_offset();
+	switch (cfi_mode) {
+	case CFI_FINEIBT:
+		func += 7;
+		break;
+	case CFI_KCFI:
+		func += 1;
+		break;
+	default:
+		return 0;
+	}
+
+	if (get_kernel_nofault(hash, func))
+		return 0;
+
+	return hash;
+}
+#endif
+
+#ifdef CONFIG_FINEIBT
+
 static bool cfi_rand __ro_after_init = true;
-static u32  cfi_seed __ro_after_init;
+static u32 cfi_seed __ro_after_init;
 
 /*
  * Re-hash the CFI hash with a boot-time seed while making sure the result is
@@ -920,16 +1076,15 @@ early_param("cfi", cfi_parse_cmdline);
  *
  */
 
-asm(	".pushsection .rodata			\n"
-	"fineibt_preamble_start:		\n"
-	"	endbr64				\n"
-	"	subl	$0x12345678, %r10d	\n"
-	"	je	fineibt_preamble_end	\n"
-	"	ud2				\n"
-	"	nop				\n"
-	"fineibt_preamble_end:			\n"
-	".popsection\n"
-);
+asm(".pushsection .rodata			\n"
+    "fineibt_preamble_start:		\n"
+    "	endbr64				\n"
+    "	subl	$0x12345678, %r10d	\n"
+    "	je	fineibt_preamble_end	\n"
+    "	ud2				\n"
+    "	nop				\n"
+    "fineibt_preamble_end:			\n"
+    ".popsection\n");
 
 extern u8 fineibt_preamble_start[];
 extern u8 fineibt_preamble_end[];
@@ -937,14 +1092,12 @@ extern u8 fineibt_preamble_end[];
 #define fineibt_preamble_size (fineibt_preamble_end - fineibt_preamble_start)
 #define fineibt_preamble_hash 7
 
-asm(	".pushsection .rodata			\n"
-	"fineibt_caller_start:			\n"
-	"	movl	$0x12345678, %r10d	\n"
-	"	sub	$16, %r11		\n"
-	ASM_NOP4
-	"fineibt_caller_end:			\n"
-	".popsection				\n"
-);
+asm(".pushsection .rodata			\n"
+    "fineibt_caller_start:			\n"
+    "	movl	$0x12345678, %r10d	\n"
+    "	sub	$16, %r11		\n" ASM_NOP4
+    "fineibt_caller_end:			\n"
+    ".popsection				\n");
 
 extern u8 fineibt_caller_start[];
 extern u8 fineibt_caller_end[];
@@ -1039,8 +1192,8 @@ static int cfi_rand_preamble(s32 *start, s32 *end)
 		u32 hash;
 
 		hash = decode_preamble_hash(addr);
-		if (WARN(!hash, "no CFI hash found at: %pS %px %*ph\n",
-			 addr, addr, 5, addr))
+		if (WARN(!hash, "no CFI hash found at: %pS %px %*ph\n", addr,
+			 addr, 5, addr))
 			return -EINVAL;
 
 		hash = cfi_rehash(hash);
@@ -1059,11 +1212,12 @@ static int cfi_rewrite_preamble(s32 *start, s32 *end)
 		u32 hash;
 
 		hash = decode_preamble_hash(addr);
-		if (WARN(!hash, "no CFI hash found at: %pS %px %*ph\n",
-			 addr, addr, 5, addr))
+		if (WARN(!hash, "no CFI hash found at: %pS %px %*ph\n", addr,
+			 addr, 5, addr))
 			return -EINVAL;
 
-		text_poke_early(addr, fineibt_preamble_start, fineibt_preamble_size);
+		text_poke_early(addr, fineibt_preamble_start,
+				fineibt_preamble_size);
 		WARN_ON(*(u32 *)(addr + fineibt_preamble_hash) != 0x12345678);
 		text_poke_early(addr + fineibt_preamble_hash, &hash, 4);
 	}
@@ -1078,7 +1232,7 @@ static void cfi_rewrite_endbr(s32 *start, s32 *end)
 	for (s = start; s < end; s++) {
 		void *addr = (void *)s + *s;
 
-		poison_endbr(addr+16, false);
+		poison_endbr(addr + 16, false);
 	}
 }
 
@@ -1113,8 +1267,10 @@ static int cfi_rewrite_callers(s32 *start, s32 *end)
 		addr -= fineibt_caller_size;
 		hash = decode_caller_hash(addr);
 		if (hash) {
-			text_poke_early(addr, fineibt_caller_start, fineibt_caller_size);
-			WARN_ON(*(u32 *)(addr + fineibt_caller_hash) != 0x12345678);
+			text_poke_early(addr, fineibt_caller_start,
+					fineibt_caller_size);
+			WARN_ON(*(u32 *)(addr + fineibt_caller_hash) !=
+				0x12345678);
 			text_poke_early(addr + fineibt_caller_hash, &hash, 4);
 		}
 		/* rely on apply_retpolines() */
@@ -1129,7 +1285,8 @@ static void __apply_fineibt(s32 *start_retpoline, s32 *end_retpoline,
 	int ret;
 
 	if (WARN_ONCE(fineibt_preamble_size != 16,
-		      "FineIBT preamble wrong size: %ld", fineibt_preamble_size))
+		      "FineIBT preamble wrong size: %ld",
+		      fineibt_preamble_size))
 		return;
 
 	if (cfi_mode == CFI_DEFAULT) {
@@ -1148,8 +1305,11 @@ static void __apply_fineibt(s32 *start_retpoline, s32 *end_retpoline,
 		goto err;
 
 	if (cfi_rand) {
-		if (builtin)
+		if (builtin) {
 			cfi_seed = get_random_u32();
+			cfi_bpf_hash = cfi_rehash(cfi_bpf_hash);
+			cfi_bpf_subprog_hash = cfi_rehash(cfi_bpf_subprog_hash);
+		}
 
 		ret = cfi_rand_preamble(start_cfi, end_cfi);
 		if (ret)
@@ -1244,22 +1404,24 @@ static void __apply_fineibt(s32 *start_retpoline, s32 *end_retpoline,
 }
 
 #ifdef CONFIG_X86_KERNEL_IBT
-static void poison_cfi(void *addr) { }
-#endif
-
-#endif
-
-void apply_fineibt(s32 *start_retpoline, s32 *end_retpoline,
-		   s32 *start_cfi, s32 *end_cfi)
+static void poison_cfi(void *addr)
 {
-	return __apply_fineibt(start_retpoline, end_retpoline,
-			       start_cfi, end_cfi,
+}
+#endif
+
+#endif
+
+void apply_fineibt(s32 *start_retpoline, s32 *end_retpoline, s32 *start_cfi,
+		   s32 *end_cfi)
+{
+	return __apply_fineibt(start_retpoline, end_retpoline, start_cfi,
+			       end_cfi,
 			       /* .builtin = */ false);
 }
 
 #ifdef CONFIG_SMP
-static void alternatives_smp_lock(const s32 *start, const s32 *end,
-				  u8 *text, u8 *text_end)
+static void alternatives_smp_lock(const s32 *start, const s32 *end, u8 *text,
+				  u8 *text_end)
 {
 	const s32 *poff;
 
@@ -1270,12 +1432,12 @@ static void alternatives_smp_lock(const s32 *start, const s32 *end,
 			continue;
 		/* turn DS segment override prefix into lock prefix */
 		if (*ptr == 0x3e)
-			text_poke(ptr, ((unsigned char []){0xf0}), 1);
+			text_poke(ptr, ((unsigned char[]){ 0xf0 }), 1);
 	}
 }
 
-static void alternatives_smp_unlock(const s32 *start, const s32 *end,
-				    u8 *text, u8 *text_end)
+static void alternatives_smp_unlock(const s32 *start, const s32 *end, u8 *text,
+				    u8 *text_end)
 {
 	const s32 *poff;
 
@@ -1286,32 +1448,32 @@ static void alternatives_smp_unlock(const s32 *start, const s32 *end,
 			continue;
 		/* turn lock prefix into DS segment override prefix */
 		if (*ptr == 0xf0)
-			text_poke(ptr, ((unsigned char []){0x3E}), 1);
+			text_poke(ptr, ((unsigned char[]){ 0x3E }), 1);
 	}
 }
 
 struct smp_alt_module {
 	/* what is this ??? */
-	struct module	*mod;
-	char		*name;
+	struct module *mod;
+	char *name;
 
 	/* ptrs to lock prefixes */
-	const s32	*locks;
-	const s32	*locks_end;
+	const s32 *locks;
+	const s32 *locks_end;
 
 	/* .text segment, needed to avoid patching init code ;) */
-	u8		*text;
-	u8		*text_end;
+	u8 *text;
+	u8 *text_end;
 
 	struct list_head next;
 };
 static LIST_HEAD(smp_alt_modules);
-static bool uniproc_patched = false;	/* protected by text_mutex */
+static bool uniproc_patched = false; /* protected by text_mutex */
 
 void __init_or_module alternatives_smp_module_add(struct module *mod,
-						  char *name,
-						  void *locks, void *locks_end,
-						  void *text,  void *text_end)
+						  char *name, void *locks,
+						  void *locks_end, void *text,
+						  void *text_end)
 {
 	struct smp_alt_module *smp;
 
@@ -1328,15 +1490,14 @@ void __init_or_module alternatives_smp_module_add(struct module *mod,
 		/* we'll run the (safe but slow) SMP code then ... */
 		goto unlock;
 
-	smp->mod	= mod;
-	smp->name	= name;
-	smp->locks	= locks;
-	smp->locks_end	= locks_end;
-	smp->text	= text;
-	smp->text_end	= text_end;
-	DPRINTK(SMP, "locks %p -> %p, text %p -> %p, name %s\n",
-		smp->locks, smp->locks_end,
-		smp->text, smp->text_end, smp->name);
+	smp->mod = mod;
+	smp->name = name;
+	smp->locks = locks;
+	smp->locks_end = locks_end;
+	smp->text = text;
+	smp->text_end = text_end;
+	DPRINTK(SMP, "locks %p -> %p, text %p -> %p, name %s\n", smp->locks,
+		smp->locks_end, smp->text, smp->text_end, smp->name);
 
 	list_add_tail(&smp->next, &smp_alt_modules);
 smp_unlock:
@@ -1439,7 +1600,8 @@ void __init_or_module apply_paravirt(struct paravirt_patch_site *start,
 		BUG_ON(p->len > MAX_PATCH_LEN);
 		/* prep the buffer with the original instructions */
 		memcpy(insn_buff, instr, p->len);
-		used = paravirt_patch(p->type, insn_buff, (unsigned long)instr, p->len);
+		used = paravirt_patch(p->type, insn_buff, (unsigned long)instr,
+				      p->len);
 
 		BUG_ON(used > p->len);
 
@@ -1450,7 +1612,7 @@ void __init_or_module apply_paravirt(struct paravirt_patch_site *start,
 }
 extern struct paravirt_patch_site __start_parainstructions[],
 	__stop_parainstructions[];
-#endif	/* CONFIG_PARAVIRT */
+#endif /* CONFIG_PARAVIRT */
 
 /*
  * Self-test for the INT3 based CALL emulation code.
@@ -1470,21 +1632,16 @@ extern struct paravirt_patch_site __start_parainstructions[],
 
 extern void int3_magic(unsigned int *ptr); /* defined in asm */
 
-asm (
-"	.pushsection	.init.text, \"ax\", @progbits\n"
-"	.type		int3_magic, @function\n"
-"int3_magic:\n"
-	ANNOTATE_NOENDBR
-"	movl	$1, (%" _ASM_ARG1 ")\n"
-	ASM_RET
-"	.size		int3_magic, .-int3_magic\n"
-"	.popsection\n"
-);
+asm("	.pushsection	.init.text, \"ax\", @progbits\n"
+    "	.type		int3_magic, @function\n"
+    "int3_magic:\n" ANNOTATE_NOENDBR "	movl	$1, (%" _ASM_ARG1
+    ")\n" ASM_RET "	.size		int3_magic, .-int3_magic\n"
+    "	.popsection\n");
 
 extern void int3_selftest_ip(void); /* defined in asm below */
 
-static int __init
-int3_exception_notify(struct notifier_block *self, unsigned long val, void *data)
+static int __init int3_exception_notify(struct notifier_block *self,
+					unsigned long val, void *data)
 {
 	unsigned long selftest = (unsigned long)&int3_selftest_ip;
 	struct die_args *args = data;
@@ -1509,8 +1666,8 @@ int3_exception_notify(struct notifier_block *self, unsigned long val, void *data
 static noinline void __init int3_selftest(void)
 {
 	static __initdata struct notifier_block int3_exception_nb = {
-		.notifier_call	= int3_exception_notify,
-		.priority	= INT_MAX-1, /* last */
+		.notifier_call = int3_exception_notify,
+		.priority = INT_MAX - 1, /* last */
 	};
 	unsigned int val = 0;
 
@@ -1522,12 +1679,11 @@ static noinline void __init int3_selftest(void)
 	 * INT3 padded with NOP to CALL_INSN_SIZE. The int3_exception_nb
 	 * notifier above will emulate CALL for us.
 	 */
-	asm volatile ("int3_selftest_ip:\n\t"
-		      ANNOTATE_NOENDBR
-		      "    int3; nop; nop; nop; nop\n\t"
-		      : ASM_CALL_CONSTRAINT
-		      : __ASM_SEL_RAW(a, D) (&val)
-		      : "memory");
+	asm volatile("int3_selftest_ip:\n\t" ANNOTATE_NOENDBR
+		     "    int3; nop; nop; nop; nop\n\t"
+		     : ASM_CALL_CONSTRAINT
+		     : __ASM_SEL_RAW(a, D)(&val)
+		     : "memory");
 
 	BUG_ON(val != 1);
 
@@ -1556,12 +1712,13 @@ static noinline void __init alt_reloc_selftest(void)
 	 * Getting this wrong will either crash and burn or tickle the WARN
 	 * above.
 	 */
-	asm_inline volatile (
-		ALTERNATIVE("", "lea %[mem], %%" _ASM_ARG1 "; call __alt_reloc_selftest;", X86_FEATURE_ALWAYS)
-		: /* output */
-		: [mem] "m" (__alt_reloc_selftest_addr)
-		: _ASM_ARG1
-	);
+	asm_inline volatile(ALTERNATIVE("",
+					"lea %[mem], %%" _ASM_ARG1
+					"; call __alt_reloc_selftest;",
+					X86_FEATURE_ALWAYS)
+			    : /* output */
+			    : [mem] "m"(__alt_reloc_selftest_addr)
+			    : _ASM_ARG1);
 }
 
 void __init alternative_instructions(void)
@@ -1587,30 +1744,13 @@ void __init alternative_instructions(void)
 	 */
 
 	/*
-	 * Paravirt patching and alternative patching can be combined to
-	 * replace a function call with a short direct code sequence (e.g.
-	 * by setting a constant return value instead of doing that in an
-	 * external function).
-	 * In order to make this work the following sequence is required:
-	 * 1. set (artificial) features depending on used paravirt
-	 *    functions which can later influence alternative patching
-	 * 2. apply paravirt patching (generally replacing an indirect
-	 *    function call with a direct one)
-	 * 3. apply alternative patching (e.g. replacing a direct function
-	 *    call with a custom code sequence)
-	 * Doing paravirt patching after alternative patching would clobber
-	 * the optimization of the custom code with a function call again.
+	 * Make sure to set (artificial) features depending on used paravirt
+	 * functions which can later influence alternative patching.
 	 */
 	paravirt_set_cap();
 
-	/*
-	 * First patch paravirt functions, such that we overwrite the indirect
-	 * call with the direct call.
-	 */
-	apply_paravirt(__parainstructions, __parainstructions_end);
-
-	__apply_fineibt(__retpoline_sites, __retpoline_sites_end,
-			__cfi_sites, __cfi_sites_end, true);
+	__apply_fineibt(__retpoline_sites, __retpoline_sites_end, __cfi_sites,
+			__cfi_sites_end, true);
 
 	/*
 	 * Rewrite the retpolines, must be done before alternatives since
@@ -1619,10 +1759,6 @@ void __init alternative_instructions(void)
 	apply_retpolines(__retpoline_sites, __retpoline_sites_end);
 	apply_returns(__return_sites, __return_sites_end);
 
-	/*
-	 * Then patch alternatives, such that those paravirt calls that are in
-	 * alternatives can be overwritten by their immediate fragments.
-	 */
 	apply_alternatives(__alt_instructions, __alt_instructions_end);
 
 	/*
@@ -1638,16 +1774,15 @@ void __init alternative_instructions(void)
 
 #ifdef CONFIG_SMP
 	/* Patch to UP if other cpus not imminent. */
-	if (!noreplace_smp && (num_present_cpus() == 1 || setup_max_cpus <= 1)) {
+	if (!noreplace_smp &&
+	    (num_present_cpus() == 1 || setup_max_cpus <= 1)) {
 		uniproc_patched = true;
-		alternatives_smp_module_add(NULL, "core kernel",
-					    __smp_locks, __smp_locks_end,
-					    _text, _etext);
+		alternatives_smp_module_add(NULL, "core kernel", __smp_locks,
+					    __smp_locks_end, _text, _etext);
 	}
 
 	if (!uniproc_patched || num_possible_cpus() == 1) {
-		free_init_pages("SMP alternatives",
-				(unsigned long)__smp_locks,
+		free_init_pages("SMP alternatives", (unsigned long)__smp_locks,
 				(unsigned long)__smp_locks_end);
 	}
 #endif
@@ -1686,8 +1821,8 @@ void __init_or_module text_poke_early(void *addr, const void *opcode,
 	} else {
 		local_irq_save(flags);
 		memcpy(addr, opcode, len);
-		local_irq_restore(flags);
 		sync_core();
+		local_irq_restore(flags);
 
 		/*
 		 * Could also do a CLFLUSH here to speed up CPU recovery; but
@@ -1777,10 +1912,11 @@ static void text_poke_memset(void *dst, const void *src, size_t len)
 
 typedef void text_poke_f(void *dst, const void *src, size_t len);
 
-static void *__text_poke(text_poke_f func, void *addr, const void *src, size_t len)
+static void *__text_poke(text_poke_f func, void *addr, const void *src,
+			 size_t len)
 {
 	bool cross_page_boundary = offset_in_page(addr) + len > PAGE_SIZE;
-	struct page *pages[2] = {NULL};
+	struct page *pages[2] = { NULL };
 	temp_mm_state_t prev;
 	unsigned long flags;
 	pte_t pte, *ptep;
@@ -1866,8 +2002,9 @@ static void *__text_poke(text_poke_f func, void *addr, const void *src, size_t l
 	 * Flushing the TLB might involve IPIs, which would require enabled
 	 * IRQs, but not if the mm is not used, as it is in this point.
 	 */
-	flush_tlb_mm_range(poking_mm, poking_addr, poking_addr +
-			   (cross_page_boundary ? 2 : 1) * PAGE_SIZE,
+	flush_tlb_mm_range(poking_mm, poking_addr,
+			   poking_addr +
+				   (cross_page_boundary ? 2 : 1) * PAGE_SIZE,
 			   PAGE_SHIFT, false);
 
 	if (func == text_poke_memcpy) {
@@ -1897,7 +2034,7 @@ static void *__text_poke(text_poke_f func, void *addr, const void *src, size_t l
  * Note that the caller must ensure that if the modified code is part of a
  * module, the module would not be removed during poking. This can be achieved
  * by registering a module notifier, and ordering module removal and patching
- * trough a mutex.
+ * through a mutex.
  */
 void *text_poke(void *addr, const void *opcode, size_t len)
 {
@@ -1938,7 +2075,8 @@ void *text_poke_copy_locked(void *addr, const void *opcode, size_t len,
 		unsigned long ptr = start + patched;
 		size_t s;
 
-		s = min_t(size_t, PAGE_SIZE * 2 - offset_in_page(ptr), len - patched);
+		s = min_t(size_t, PAGE_SIZE * 2 - offset_in_page(ptr),
+			  len - patched);
 
 		__text_poke(text_poke_memcpy, (void *)ptr, opcode + patched, s);
 		patched += s;
@@ -1988,7 +2126,8 @@ void *text_poke_set(void *addr, int c, size_t len)
 		unsigned long ptr = start + patched;
 		size_t s;
 
-		s = min_t(size_t, PAGE_SIZE * 2 - offset_in_page(ptr), len - patched);
+		s = min_t(size_t, PAGE_SIZE * 2 - offset_in_page(ptr),
+			  len - patched);
 
 		__text_poke(text_poke_memset, (void *)ptr, (void *)&c, s);
 		patched += s;
@@ -2031,8 +2170,7 @@ struct bp_patching_desc {
 
 static struct bp_patching_desc bp_desc;
 
-static __always_inline
-struct bp_patching_desc *try_get_desc(void)
+static __always_inline struct bp_patching_desc *try_get_desc(void)
 {
 	struct bp_patching_desc *desc = &bp_desc;
 
@@ -2057,7 +2195,7 @@ static __always_inline void *text_poke_addr(struct text_poke_loc *tp)
 
 static __always_inline int patch_cmp(const void *key, const void *elt)
 {
-	struct text_poke_loc *tp = (struct text_poke_loc *) elt;
+	struct text_poke_loc *tp = (struct text_poke_loc *)elt;
 
 	if (key < text_poke_addr(tp))
 		return -1;
@@ -2093,15 +2231,14 @@ noinstr int poke_int3_handler(struct pt_regs *regs)
 	/*
 	 * Discount the INT3. See text_poke_bp_batch().
 	 */
-	ip = (void *) regs->ip - INT3_INSN_SIZE;
+	ip = (void *)regs->ip - INT3_INSN_SIZE;
 
 	/*
 	 * Skip the binary search if there is a single member in the vector.
 	 */
 	if (unlikely(desc->nr_entries > 1)) {
 		tp = __inline_bsearch(ip, desc->vec, desc->nr_entries,
-				      sizeof(struct text_poke_loc),
-				      patch_cmp);
+				      sizeof(struct text_poke_loc), patch_cmp);
 		if (!tp)
 			goto out_put;
 	} else {
@@ -2173,7 +2310,8 @@ static int tp_vec_nr;
  *		  replacing opcode
  *	- sync cores
  */
-static void text_poke_bp_batch(struct text_poke_loc *tp, unsigned int nr_entries)
+static void text_poke_bp_batch(struct text_poke_loc *tp,
+			       unsigned int nr_entries)
 {
 	unsigned char int3 = INT3_INSN_OPCODE;
 	unsigned int i;
@@ -2220,8 +2358,10 @@ static void text_poke_bp_batch(struct text_poke_loc *tp, unsigned int nr_entries
 	 * Second step: update all but the first byte of the patched range.
 	 */
 	for (do_sync = 0, i = 0; i < nr_entries; i++) {
-		u8 old[POKE_MAX_OPCODE_SIZE+1] = { tp[i].old, };
-		u8 _new[POKE_MAX_OPCODE_SIZE+1];
+		u8 old[POKE_MAX_OPCODE_SIZE + 1] = {
+			tp[i].old,
+		};
+		u8 _new[POKE_MAX_OPCODE_SIZE + 1];
 		const u8 *new = tp[i].text;
 		int len = tp[i].len;
 
@@ -2237,8 +2377,7 @@ static void text_poke_bp_batch(struct text_poke_loc *tp, unsigned int nr_entries
 			}
 
 			text_poke(text_poke_addr(&tp[i]) + INT3_INSN_SIZE,
-				  new + INT3_INSN_SIZE,
-				  len - INT3_INSN_SIZE);
+				  new + INT3_INSN_SIZE, len - INT3_INSN_SIZE);
 
 			do_sync++;
 		}
@@ -2267,7 +2406,8 @@ static void text_poke_bp_batch(struct text_poke_loc *tp, unsigned int nr_entries
 		 * The old instruction is recorded so that the event can be
 		 * processed forwards or backwards.
 		 */
-		perf_event_text_poke(text_poke_addr(&tp[i]), old, len, new, len);
+		perf_event_text_poke(text_poke_addr(&tp[i]), old, len, new,
+				     len);
 	}
 
 	if (do_sync) {
@@ -2307,14 +2447,15 @@ static void text_poke_bp_batch(struct text_poke_loc *tp, unsigned int nr_entries
 }
 
 static void text_poke_loc_init(struct text_poke_loc *tp, void *addr,
-			       const void *opcode, size_t len, const void *emulate)
+			       const void *opcode, size_t len,
+			       const void *emulate)
 {
 	struct insn insn;
 	int ret, i = 0;
 
 	if (len == 6)
 		i = 1;
-	memcpy((void *)tp->text, opcode+i, len-i);
+	memcpy((void *)tp->text, opcode + i, len - i);
 	if (!emulate)
 		emulate = opcode;
 
@@ -2415,7 +2556,8 @@ void text_poke_finish(void)
 	text_poke_flush(NULL);
 }
 
-void __ref text_poke_queue(void *addr, const void *opcode, size_t len, const void *emulate)
+void __ref text_poke_queue(void *addr, const void *opcode, size_t len,
+			   const void *emulate)
 {
 	struct text_poke_loc *tp;
 
@@ -2436,7 +2578,8 @@ void __ref text_poke_queue(void *addr, const void *opcode, size_t len, const voi
  * dynamically allocated memory. This function should be used when it is
  * not possible to allocate memory.
  */
-void __ref text_poke_bp(void *addr, const void *opcode, size_t len, const void *emulate)
+void __ref text_poke_bp(void *addr, const void *opcode, size_t len,
+			const void *emulate)
 {
 	struct text_poke_loc tp;
 

@@ -6,6 +6,10 @@
 
 #include <asm/paravirt_types.h>
 
+#ifndef __ASSEMBLY__
+struct mm_struct;
+#endif
+
 #ifdef CONFIG_PARAVIRT
 #include <asm/pgtable_types.h>
 #include <asm/asm.h>
@@ -64,7 +68,7 @@ void native_flush_tlb_local(void);
 void native_flush_tlb_global(void);
 void native_flush_tlb_one_user(unsigned long addr);
 void native_flush_tlb_multi(const struct cpumask *cpumask,
-			     const struct flush_tlb_info *info);
+			    const struct flush_tlb_info *info);
 
 static inline void __flush_tlb_local(void)
 {
@@ -82,12 +86,13 @@ static inline void __flush_tlb_one_user(unsigned long addr)
 }
 
 static inline void __flush_tlb_multi(const struct cpumask *cpumask,
-				      const struct flush_tlb_info *info)
+				     const struct flush_tlb_info *info)
 {
 	PVOP_VCALL2(mmu.flush_tlb_multi, cpumask, info);
 }
 
-static inline void paravirt_tlb_remove_table(struct mmu_gather *tlb, void *table)
+static inline void paravirt_tlb_remove_table(struct mmu_gather *tlb,
+					     void *table)
 {
 	PVOP_VCALL2(mmu.tlb_remove_table, tlb, table);
 }
@@ -97,8 +102,8 @@ static inline void paravirt_arch_exit_mmap(struct mm_struct *mm)
 	PVOP_VCALL1(mmu.exit_mmap, mm);
 }
 
-static inline void notify_page_enc_status_changed(unsigned long pfn,
-						  int npages, bool enc)
+static inline void notify_page_enc_status_changed(unsigned long pfn, int npages,
+						  bool enc)
 {
 	PVOP_VCALL3(mmu.notify_page_enc_status_changed, pfn, npages, enc);
 }
@@ -153,14 +158,14 @@ static __always_inline void write_cr2(unsigned long x)
 
 static inline unsigned long __read_cr3(void)
 {
-	return PVOP_ALT_CALL0(unsigned long, mmu.read_cr3,
-			      "mov %%cr3, %%rax;", ALT_NOT(X86_FEATURE_PV_GUEST));
+	return PVOP_ALT_CALL0(unsigned long, mmu.read_cr3, "mov %%cr3, %%rax;",
+			      ALT_NOT(X86_FEATURE_PV_GUEST));
 }
 
 static inline void write_cr3(unsigned long x)
 {
-	PVOP_ALT_VCALL1(mmu.write_cr3, x,
-			"mov %%rdi, %%cr3", ALT_NOT(X86_FEATURE_PV_GUEST));
+	PVOP_ALT_VCALL1(mmu.write_cr3, x, "mov %%rdi, %%cr3",
+			ALT_NOT(X86_FEATURE_PV_GUEST));
 }
 
 static inline void __write_cr4(unsigned long x)
@@ -182,7 +187,7 @@ extern noinstr void pv_native_wbinvd(void);
 
 static __always_inline void wbinvd(void)
 {
-	PVOP_ALT_VCALL0(cpu.wbinvd, "wbinvd", ALT_NOT(X86_FEATURE_XENPV));
+	PVOP_ALT_VCALL0(cpu.wbinvd, "wbinvd", ALT_NOT_XEN);
 }
 
 static inline u64 paravirt_read_msr(unsigned msr)
@@ -190,8 +195,7 @@ static inline u64 paravirt_read_msr(unsigned msr)
 	return PVOP_CALL1(u64, cpu.read_msr, msr);
 }
 
-static inline void paravirt_write_msr(unsigned msr,
-				      unsigned low, unsigned high)
+static inline void paravirt_write_msr(unsigned msr, unsigned low, unsigned high)
 {
 	PVOP_VCALL3(cpu.write_msr, msr, low, high);
 }
@@ -201,45 +205,45 @@ static inline u64 paravirt_read_msr_safe(unsigned msr, int *err)
 	return PVOP_CALL2(u64, cpu.read_msr_safe, msr, err);
 }
 
-static inline int paravirt_write_msr_safe(unsigned msr,
-					  unsigned low, unsigned high)
+static inline int paravirt_write_msr_safe(unsigned msr, unsigned low,
+					  unsigned high)
 {
 	return PVOP_CALL3(int, cpu.write_msr_safe, msr, low, high);
 }
 
-#define rdmsr(msr, val1, val2)			\
-do {						\
-	u64 _l = paravirt_read_msr(msr);	\
-	val1 = (u32)_l;				\
-	val2 = _l >> 32;			\
-} while (0)
+#define rdmsr(msr, val1, val2)                   \
+	do {                                     \
+		u64 _l = paravirt_read_msr(msr); \
+		val1 = (u32)_l;                  \
+		val2 = _l >> 32;                 \
+	} while (0)
 
-#define wrmsr(msr, val1, val2)			\
-do {						\
-	paravirt_write_msr(msr, val1, val2);	\
-} while (0)
+#define wrmsr(msr, val1, val2)                       \
+	do {                                         \
+		paravirt_write_msr(msr, val1, val2); \
+	} while (0)
 
-#define rdmsrl(msr, val)			\
-do {						\
-	val = paravirt_read_msr(msr);		\
-} while (0)
+#define rdmsrl(msr, val)                      \
+	do {                                  \
+		val = paravirt_read_msr(msr); \
+	} while (0)
 
 static inline void wrmsrl(unsigned msr, u64 val)
 {
-	wrmsr(msr, (u32)val, (u32)(val>>32));
+	wrmsr(msr, (u32)val, (u32)(val >> 32));
 }
 
-#define wrmsr_safe(msr, a, b)	paravirt_write_msr_safe(msr, a, b)
+#define wrmsr_safe(msr, a, b) paravirt_write_msr_safe(msr, a, b)
 
 /* rdmsr with exception handling */
-#define rdmsr_safe(msr, a, b)				\
-({							\
-	int _err;					\
-	u64 _l = paravirt_read_msr_safe(msr, &_err);	\
-	(*a) = (u32)_l;					\
-	(*b) = _l >> 32;				\
-	_err;						\
-})
+#define rdmsr_safe(msr, a, b)                                \
+	({                                                   \
+		int _err;                                    \
+		u64 _l = paravirt_read_msr_safe(msr, &_err); \
+		(*a) = (u32)_l;                              \
+		(*b) = _l >> 32;                             \
+		_err;                                        \
+	})
 
 static inline int rdmsrl_safe(unsigned msr, unsigned long long *p)
 {
@@ -254,12 +258,12 @@ static inline unsigned long long paravirt_read_pmc(int counter)
 	return PVOP_CALL1(u64, cpu.read_pmc, counter);
 }
 
-#define rdpmc(counter, low, high)		\
-do {						\
-	u64 _l = paravirt_read_pmc(counter);	\
-	low = (u32)_l;				\
-	high = _l >> 32;			\
-} while (0)
+#define rdpmc(counter, low, high)                    \
+	do {                                         \
+		u64 _l = paravirt_read_pmc(counter); \
+		low = (u32)_l;                       \
+		high = _l >> 32;                     \
+	} while (0)
 
 #define rdpmcl(counter, val) ((val) = paravirt_read_pmc(counter))
 
@@ -294,7 +298,7 @@ static inline unsigned long paravirt_store_tr(void)
 	return PVOP_CALL0(unsigned long, cpu.store_tr);
 }
 
-#define store_tr(tr)	((tr) = paravirt_store_tr())
+#define store_tr(tr) ((tr) = paravirt_store_tr())
 static inline void load_TLS(struct thread_struct *t, unsigned cpu)
 {
 	PVOP_VCALL2(cpu.load_tls, t, cpu);
@@ -389,45 +393,43 @@ static inline void paravirt_release_p4d(unsigned long pfn)
 
 static inline pte_t __pte(pteval_t val)
 {
-	return (pte_t) { PVOP_ALT_CALLEE1(pteval_t, mmu.make_pte, val,
-					  "mov %%rdi, %%rax",
-					  ALT_NOT(X86_FEATURE_XENPV)) };
+	return (pte_t){ PVOP_ALT_CALLEE1(pteval_t, mmu.make_pte, val,
+					 "mov %%rdi, %%rax", ALT_NOT_XEN) };
 }
 
 static inline pteval_t pte_val(pte_t pte)
 {
 	return PVOP_ALT_CALLEE1(pteval_t, mmu.pte_val, pte.pte,
-				"mov %%rdi, %%rax", ALT_NOT(X86_FEATURE_XENPV));
+				"mov %%rdi, %%rax", ALT_NOT_XEN);
 }
 
 static inline pgd_t __pgd(pgdval_t val)
 {
-	return (pgd_t) { PVOP_ALT_CALLEE1(pgdval_t, mmu.make_pgd, val,
-					  "mov %%rdi, %%rax",
-					  ALT_NOT(X86_FEATURE_XENPV)) };
+	return (pgd_t){ PVOP_ALT_CALLEE1(pgdval_t, mmu.make_pgd, val,
+					 "mov %%rdi, %%rax", ALT_NOT_XEN) };
 }
 
 static inline pgdval_t pgd_val(pgd_t pgd)
 {
 	return PVOP_ALT_CALLEE1(pgdval_t, mmu.pgd_val, pgd.pgd,
-				"mov %%rdi, %%rax", ALT_NOT(X86_FEATURE_XENPV));
+				"mov %%rdi, %%rax", ALT_NOT_XEN);
 }
 
-#define  __HAVE_ARCH_PTEP_MODIFY_PROT_TRANSACTION
-static inline pte_t ptep_modify_prot_start(struct vm_area_struct *vma, unsigned long addr,
-					   pte_t *ptep)
+#define __HAVE_ARCH_PTEP_MODIFY_PROT_TRANSACTION
+static inline pte_t ptep_modify_prot_start(struct vm_area_struct *vma,
+					   unsigned long addr, pte_t *ptep)
 {
 	pteval_t ret;
 
 	ret = PVOP_CALL3(pteval_t, mmu.ptep_modify_prot_start, vma, addr, ptep);
 
-	return (pte_t) { .pte = ret };
+	return (pte_t){ .pte = ret };
 }
 
-static inline void ptep_modify_prot_commit(struct vm_area_struct *vma, unsigned long addr,
-					   pte_t *ptep, pte_t old_pte, pte_t pte)
+static inline void ptep_modify_prot_commit(struct vm_area_struct *vma,
+					   unsigned long addr, pte_t *ptep,
+					   pte_t old_pte, pte_t pte)
 {
-
 	PVOP_VCALL4(mmu.ptep_modify_prot_commit, vma, addr, ptep, pte.pte);
 }
 
@@ -443,15 +445,14 @@ static inline void set_pmd(pmd_t *pmdp, pmd_t pmd)
 
 static inline pmd_t __pmd(pmdval_t val)
 {
-	return (pmd_t) { PVOP_ALT_CALLEE1(pmdval_t, mmu.make_pmd, val,
-					  "mov %%rdi, %%rax",
-					  ALT_NOT(X86_FEATURE_XENPV)) };
+	return (pmd_t){ PVOP_ALT_CALLEE1(pmdval_t, mmu.make_pmd, val,
+					 "mov %%rdi, %%rax", ALT_NOT_XEN) };
 }
 
 static inline pmdval_t pmd_val(pmd_t pmd)
 {
 	return PVOP_ALT_CALLEE1(pmdval_t, mmu.pmd_val, pmd.pmd,
-				"mov %%rdi, %%rax", ALT_NOT(X86_FEATURE_XENPV));
+				"mov %%rdi, %%rax", ALT_NOT_XEN);
 }
 
 static inline void set_pud(pud_t *pudp, pud_t pud)
@@ -463,16 +464,16 @@ static inline pud_t __pud(pudval_t val)
 {
 	pudval_t ret;
 
-	ret = PVOP_ALT_CALLEE1(pudval_t, mmu.make_pud, val,
-			       "mov %%rdi, %%rax", ALT_NOT(X86_FEATURE_XENPV));
+	ret = PVOP_ALT_CALLEE1(pudval_t, mmu.make_pud, val, "mov %%rdi, %%rax",
+			       ALT_NOT_XEN);
 
-	return (pud_t) { ret };
+	return (pud_t){ ret };
 }
 
 static inline pudval_t pud_val(pud_t pud)
 {
 	return PVOP_ALT_CALLEE1(pudval_t, mmu.pud_val, pud.pud,
-				"mov %%rdi, %%rax", ALT_NOT(X86_FEATURE_XENPV));
+				"mov %%rdi, %%rax", ALT_NOT_XEN);
 }
 
 static inline void pud_clear(pud_t *pudp)
@@ -492,16 +493,15 @@ static inline void set_p4d(p4d_t *p4dp, p4d_t p4d)
 static inline p4d_t __p4d(p4dval_t val)
 {
 	p4dval_t ret = PVOP_ALT_CALLEE1(p4dval_t, mmu.make_p4d, val,
-					"mov %%rdi, %%rax",
-					ALT_NOT(X86_FEATURE_XENPV));
+					"mov %%rdi, %%rax", ALT_NOT_XEN);
 
-	return (p4d_t) { ret };
+	return (p4d_t){ ret };
 }
 
 static inline p4dval_t p4d_val(p4d_t p4d)
 {
 	return PVOP_ALT_CALLEE1(p4dval_t, mmu.p4d_val, p4d.p4d,
-				"mov %%rdi, %%rax", ALT_NOT(X86_FEATURE_XENPV));
+				"mov %%rdi, %%rax", ALT_NOT_XEN);
 }
 
 static inline void __set_pgd(pgd_t *pgdp, pgd_t pgd)
@@ -509,19 +509,21 @@ static inline void __set_pgd(pgd_t *pgdp, pgd_t pgd)
 	PVOP_VCALL2(mmu.set_pgd, pgdp, native_pgd_val(pgd));
 }
 
-#define set_pgd(pgdp, pgdval) do {					\
-	if (pgtable_l5_enabled())						\
-		__set_pgd(pgdp, pgdval);				\
-	else								\
-		set_p4d((p4d_t *)(pgdp), (p4d_t) { (pgdval).pgd });	\
-} while (0)
+#define set_pgd(pgdp, pgdval)                                              \
+	do {                                                               \
+		if (pgtable_l5_enabled())                                  \
+			__set_pgd(pgdp, pgdval);                           \
+		else                                                       \
+			set_p4d((p4d_t *)(pgdp), (p4d_t){ (pgdval).pgd }); \
+	} while (0)
 
-#define pgd_clear(pgdp) do {						\
-	if (pgtable_l5_enabled())					\
-		set_pgd(pgdp, native_make_pgd(0));			\
-} while (0)
+#define pgd_clear(pgdp)                                    \
+	do {                                               \
+		if (pgtable_l5_enabled())                  \
+			set_pgd(pgdp, native_make_pgd(0)); \
+	} while (0)
 
-#endif  /* CONFIG_PGTABLE_LEVELS == 5 */
+#endif /* CONFIG_PGTABLE_LEVELS == 5 */
 
 static inline void p4d_clear(p4d_t *p4dp)
 {
@@ -544,7 +546,7 @@ static inline void pmd_clear(pmd_t *pmdp)
 	set_pmd(pmdp, native_make_pmd(0));
 }
 
-#define  __HAVE_ARCH_START_CONTEXT_SWITCH
+#define __HAVE_ARCH_START_CONTEXT_SWITCH
 static inline void arch_start_context_switch(struct task_struct *prev)
 {
 	PVOP_VCALL1(cpu.start_context_switch, prev);
@@ -555,7 +557,7 @@ static inline void arch_end_context_switch(struct task_struct *next)
 	PVOP_VCALL1(cpu.end_context_switch, next);
 }
 
-#define  __HAVE_ARCH_ENTER_LAZY_MMU_MODE
+#define __HAVE_ARCH_ENTER_LAZY_MMU_MODE
 static inline void arch_enter_lazy_mmu_mode(void)
 {
 	PVOP_VCALL0(mmu.lazy_mode.enter);
@@ -588,7 +590,7 @@ static inline void __set_vsyscall_page(phys_addr_t phys, pgprot_t flags)
 #if defined(CONFIG_SMP) && defined(CONFIG_PARAVIRT_SPINLOCKS)
 
 static __always_inline void pv_queued_spin_lock_slowpath(struct qspinlock *lock,
-							u32 val)
+							 u32 val)
 {
 	PVOP_VCALL2(lock.queued_spin_lock_slowpath, lock, val);
 }
@@ -624,27 +626,27 @@ bool __raw_callee_save___native_vcpu_is_preempted(long cpu);
 
 #ifdef CONFIG_X86_32
 /* save and restore all caller-save registers, except return value */
-#define PV_SAVE_ALL_CALLER_REGS		"pushl %ecx;"
-#define PV_RESTORE_ALL_CALLER_REGS	"popl  %ecx;"
+#define PV_SAVE_ALL_CALLER_REGS "pushl %ecx;"
+#define PV_RESTORE_ALL_CALLER_REGS "popl  %ecx;"
 #else
 /* save and restore all caller-save registers, except return value */
-#define PV_SAVE_ALL_CALLER_REGS						\
-	"push %rcx;"							\
-	"push %rdx;"							\
-	"push %rsi;"							\
-	"push %rdi;"							\
-	"push %r8;"							\
-	"push %r9;"							\
-	"push %r10;"							\
+#define PV_SAVE_ALL_CALLER_REGS \
+	"push %rcx;"            \
+	"push %rdx;"            \
+	"push %rsi;"            \
+	"push %rdi;"            \
+	"push %r8;"             \
+	"push %r9;"             \
+	"push %r10;"            \
 	"push %r11;"
-#define PV_RESTORE_ALL_CALLER_REGS					\
-	"pop %r11;"							\
-	"pop %r10;"							\
-	"pop %r9;"							\
-	"pop %r8;"							\
-	"pop %rdi;"							\
-	"pop %rsi;"							\
-	"pop %rdx;"							\
+#define PV_RESTORE_ALL_CALLER_REGS \
+	"pop %r11;"                \
+	"pop %r10;"                \
+	"pop %r9;"                 \
+	"pop %r8;"                 \
+	"pop %rdi;"                \
+	"pop %rsi;"                \
+	"pop %rdx;"                \
 	"pop %rcx;"
 #endif
 
@@ -661,34 +663,33 @@ bool __raw_callee_save___native_vcpu_is_preempted(long cpu);
  * functions.
  */
 #define PV_THUNK_NAME(func) "__raw_callee_save_" #func
-#define __PV_CALLEE_SAVE_REGS_THUNK(func, section)			\
-	extern typeof(func) __raw_callee_save_##func;			\
-									\
-	asm(".pushsection " section ", \"ax\";"				\
-	    ".globl " PV_THUNK_NAME(func) ";"				\
-	    ".type " PV_THUNK_NAME(func) ", @function;"			\
-	    ASM_FUNC_ALIGN						\
-	    PV_THUNK_NAME(func) ":"					\
-	    ASM_ENDBR							\
-	    FRAME_BEGIN							\
-	    PV_SAVE_ALL_CALLER_REGS					\
-	    "call " #func ";"						\
-	    PV_RESTORE_ALL_CALLER_REGS					\
-	    FRAME_END							\
-	    ASM_RET							\
-	    ".size " PV_THUNK_NAME(func) ", .-" PV_THUNK_NAME(func) ";"	\
-	    ".popsection")
+#define __PV_CALLEE_SAVE_REGS_THUNK(func, section)                                                 \
+	extern typeof(func) __raw_callee_save_##func;                                              \
+                                                                                                   \
+	asm(".pushsection " section ", \"ax\";"                                                    \
+	    ".globl " PV_THUNK_NAME(                                                               \
+		    func) ";"                                                                      \
+			  ".type " PV_THUNK_NAME(                                                  \
+				  func) ", @function;" ASM_FUNC_ALIGN                              \
+				  PV_THUNK_NAME(                                                   \
+					  func) ":" ASM_ENDBR FRAME_BEGIN                          \
+					  PV_SAVE_ALL_CALLER_REGS                                  \
+						"call " #func                                      \
+						";" PV_RESTORE_ALL_CALLER_REGS                     \
+							FRAME_END ASM_RET                          \
+						".size " PV_THUNK_NAME(func) ", .-" PV_THUNK_NAME( \
+							func) ";"                                  \
+							      ".popsection")
 
-#define PV_CALLEE_SAVE_REGS_THUNK(func)			\
+#define PV_CALLEE_SAVE_REGS_THUNK(func) \
 	__PV_CALLEE_SAVE_REGS_THUNK(func, ".text")
 
 /* Get a reference to a callee-save function */
-#define PV_CALLEE_SAVE(func)						\
-	((struct paravirt_callee_save) { __raw_callee_save_##func })
+#define PV_CALLEE_SAVE(func) \
+	((struct paravirt_callee_save){ __raw_callee_save_##func })
 
 /* Promise that "func" already uses the right calling convention */
-#define __PV_IS_CALLEE_SAVE(func)			\
-	((struct paravirt_callee_save) { func })
+#define __PV_IS_CALLEE_SAVE(func) ((struct paravirt_callee_save){ func })
 
 #ifdef CONFIG_PARAVIRT_XXL
 static __always_inline unsigned long arch_local_save_flags(void)
@@ -699,12 +700,14 @@ static __always_inline unsigned long arch_local_save_flags(void)
 
 static __always_inline void arch_local_irq_disable(void)
 {
-	PVOP_ALT_VCALLEE0(irq.irq_disable, "cli;", ALT_NOT(X86_FEATURE_PV_GUEST));
+	PVOP_ALT_VCALLEE0(irq.irq_disable, "cli;",
+			  ALT_NOT(X86_FEATURE_PV_GUEST));
 }
 
 static __always_inline void arch_local_irq_enable(void)
 {
-	PVOP_ALT_VCALLEE0(irq.irq_enable, "sti;", ALT_NOT(X86_FEATURE_PV_GUEST));
+	PVOP_ALT_VCALLEE0(irq.irq_enable, "sti;",
+			  ALT_NOT(X86_FEATURE_PV_GUEST));
 }
 
 static __always_inline unsigned long arch_local_irq_save(void)
@@ -716,7 +719,6 @@ static __always_inline unsigned long arch_local_irq_save(void)
 	return f;
 }
 #endif
-
 
 /* Make sure as little as possible of this mess escapes. */
 #undef PARAVIRT_CALL
@@ -733,57 +735,58 @@ static __always_inline unsigned long arch_local_irq_save(void)
 #undef PVOP_VCALL4
 #undef PVOP_CALL4
 
-#define DEFINE_PARAVIRT_ASM(func, instr, sec)		\
-	asm (".pushsection " #sec ", \"ax\"\n"		\
-	     ".global " #func "\n\t"			\
-	     ".type " #func ", @function\n\t"		\
-	     ASM_FUNC_ALIGN "\n"			\
-	     #func ":\n\t"				\
-	     ASM_ENDBR					\
-	     instr "\n\t"				\
-	     ASM_RET					\
-	     ".size " #func ", . - " #func "\n\t"	\
-	     ".popsection")
-
 extern void default_banner(void);
 void native_pv_lock_init(void) __init;
 
-#else  /* __ASSEMBLY__ */
+#else /* __ASSEMBLY__ */
 
-#define _PVSITE(ptype, ops)			\
-771:;						\
-	ops;					\
-772:;						\
-	.pushsection .parainstructions,"a";	\
-	 .long 771b-.;				\
-	 .byte ptype;				\
-	 .byte 772b-771b;			\
+<<<<<<< HEAD
+#define _PVSITE(ptype, ops)                 \
+	771:;                               \
+	ops;                                \
+	772:;                               \
+	.pushsection.parainstructions, "a"; \
+	.long 771b -.;                      \
+	.byte ptype;                        \
+	.byte 772b - 771b;                  \
 	.popsection
 
-
+	== == ==
+	=
+>>>>>>> merge-v6.8
 #ifdef CONFIG_X86_64
 #ifdef CONFIG_PARAVIRT_XXL
-
-#define PARA_PATCH(off)		((off) / 8)
-#define PARA_SITE(ptype, ops)	_PVSITE(ptype, ops)
-#define PARA_INDIRECT(addr)	*addr(%rip)
-
 #ifdef CONFIG_DEBUG_ENTRY
-.macro PARA_IRQ_save_fl
-	PARA_SITE(PARA_PATCH(PV_IRQ_save_fl),
-		  ANNOTATE_RETPOLINE_SAFE;
-		  call PARA_INDIRECT(pv_ops+PV_IRQ_save_fl);)
+
+<<<<<<< HEAD
+#define PARA_PATCH(off) ((off) / 8)
+#define PARA_SITE(ptype, ops) _PVSITE(ptype, ops)
+	== == ==
+	=
+>>>>>>> merge-v6.8
+#define PARA_INDIRECT(addr) *addr(% rip)
+
+		.macro PARA_IRQ_save_fl ANNOTATE_RETPOLINE_SAFE;
+call PARA_INDIRECT(pv_ops + PV_IRQ_save_fl);
 .endm
 
-#define SAVE_FLAGS	ALTERNATIVE "PARA_IRQ_save_fl;", "pushf; pop %rax;", \
-				    ALT_NOT(X86_FEATURE_PV_GUEST)
+<<<<<<< HEAD
+#define SAVE_FLAGS                                           \
+	ALTERNATIVE "PARA_IRQ_save_fl;", "pushf; pop %rax;", \
+		ALT_NOT(X86_FEATURE_PV_GUEST)
+	== == ==
+	=
+#define SAVE_FLAGS                                                             \
+	ALTERNATIVE_2 "PARA_IRQ_save_fl;", "ALT_CALL_INSTR;", ALT_CALL_ALWAYS, \
+		"pushf; pop %rax;", ALT_NOT_XEN
+		>>>>>>> merge - v6 .8
 #endif
 #endif /* CONFIG_PARAVIRT_XXL */
-#endif	/* CONFIG_X86_64 */
+#endif /* CONFIG_X86_64 */
 
 #endif /* __ASSEMBLY__ */
-#else  /* CONFIG_PARAVIRT */
-# define default_banner x86_init_noop
+#else /* CONFIG_PARAVIRT */
+#define default_banner x86_init_noop
 
 #ifndef __ASSEMBLY__
 static inline void native_pv_lock_init(void)
@@ -794,7 +797,8 @@ static inline void native_pv_lock_init(void)
 
 #ifndef __ASSEMBLY__
 #ifndef CONFIG_PARAVIRT_XXL
-static inline void paravirt_enter_mmap(struct mm_struct *mm)
+				static inline void
+				paravirt_enter_mmap(struct mm_struct *mm)
 {
 }
 #endif
